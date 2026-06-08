@@ -1,0 +1,30 @@
+{
+  "name": "dog-coffee",
+  "version": "0.1.0",
+  "description": "Dog-Coffee — minimal soul version of a multi-agent collaborative AI system (inspired by Cat-Coffee/Clowder AI)",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "start:mcp": "node dist/mcp/index.js",
+    "compile-l0": "node scripts/compile-system-prompt-l0.mjs",
+    "test": "node --test dist/test/**/*.test.js",
+    "check": "biome check src/",
+    "check:fix": "biome check --fix src/"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/node": "^25.9.1",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "fastify": "^5.8.5",
+    "zod": "^4.4.3"
+  }
+}
