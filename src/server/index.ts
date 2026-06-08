@@ -13,18 +13,25 @@
 
 import Fastify from 'fastify';
 import { initDogRegistry } from '../config/dog-config-loader.js';
+import { threadStore } from '../stores/ThreadStore.js';
+import { messageStore } from '../stores/MessageStore.js';
 import { registerThreadRoutes } from '../routes/threads.js';
 import { registerMessageRoutes } from '../routes/messages.js';
 import { registerA2aRoutes } from '../routes/a2a.js';
 
 const PORT = Number.parseInt(process.env.PORT ?? '3100', 10);
 const HOST = process.env.HOST ?? 'localhost';
+const DATA_DIR = process.env.DOG_COFFEE_DATA_DIR ?? 'data';
 
 export async function createServer(configPath?: string) {
   const app = Fastify({ logger: true });
 
   // Initialize dog registry from config
   initDogRegistry(configPath);
+
+  // Initialize stores — load persisted data from disk
+  threadStore.init();
+  messageStore.init();
 
   // Register routes
   registerThreadRoutes(app);

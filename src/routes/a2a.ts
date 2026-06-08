@@ -1,13 +1,9 @@
 /**
  * A2A Routes — API endpoints for ball-passing and agent invocation.
  *
- * UPDATED: invoke now actually generates a response via DogResponder
+ * All request bodies validated via Zod schemas (schemas.ts).
+ * invoke now actually generates a response via DogResponder
  * and stores it as a message. The collaboration loop is CLOSED.
- *
- * Three endpoints:
- * 1. POST /api/a2a/invoke — Invoke a dog, get its response, store it
- * 2. POST /api/a2a/hold-ball — Dog holds ball while waiting
- * 3. GET /api/a2a/ball-state — Check who holds the ball
  */
 
 import { FastifyInstance } from 'fastify';
@@ -18,72 +14,59 @@ import { createThreadId, createUserId } from '../types/thread.js';
 import { createDogId } from '../types/ids.js';
 import { dogRegistry } from '../registry/DogRegistry.js';
 import { generateDemoResponse } from '../responder/DogResponder.js';
+import { invokeSchema, holdBallSchema } from './schemas.js';
 
 const DEFAULT_USER = createUserId('default-user');
 
-interface InvokeRequest {
-  threadId: string;
-  dogId: string;
-  content?: string;
-  autoRespond?: boolean;  // if true, automatically generate and store response
-}
-
-interface HoldBallRequest {
-  threadId: string;
-  dogId: string;
-  reason: string;
-  nextStep: string;
-  wakeAfterMs: number;
-}
-
 export function registerA2aRoutes(app: FastifyInstance): void {
 
-  /** Invoke a dog to respond in a thread — NOW ACTUALLY RESPONDS */
+  /** Invoke a dog to respond in a thread */
   app.post('/api/a2a/invoke', async (request, reply) => {
-    const body = request.body as InvokeRequest;
-    if (!body?.threadId || !body?.dogId) {
-      return reply.status(400).send({ error: 'threadId and dogId required' });
+    const parsed = invokeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request', details: parsed.error.flatten() });
     }
+    const { threadId: threadIdStr, dogId: dogIdStr, content, autoRespond } = parsed.data;
 
-    const threadId = createThreadId(body.threadId);
+    const threadId = createThreadId(threadIdStr);
     const thread = threadStore.tryGet(threadId);
     if (!thread) {
       return reply.status(404).send({ error: 'Thread not found' });
     }
 
-    const dogId = createDogId(body.dogId);
+    const dogId = createDogId(dogIdStr);
     const dogEntry = dogRegistry.tryGet(dogId);
     if (!dogEntry) {
-      return reply.status(404).send({ error: `Unknown dogId: ${body.dogId}` });
+      return reply.status(404).send({ error: `Unknown dogId: ${dogIdStr}` });
     }
 
     // Acquire ball
-    ballTracker.acquire(threadId, dogId, body.content ?? 'invoked by user');
+    ballTracker.acquire(threadId, dogId, content ?? 'invoked by user');
     threadStore.addParticipant(threadId, dogId);
 
     // Store trigger message if provided
-    if (body.content) {
-      messageStore.append(threadId, DEFAULT_USER, null, body.content);
+    if (content) {
+      messageStore.append(threadId, DEFAULT_USER, null, content);
     }
 
     // Compile L0 prompt
     const { compileL0 } = await import('../prompt/compile-l0.js');
-    const l0Prompt = compileL0({ dogId: body.dogId });
+    const l0Prompt = compileL0({ dogId: dogIdStr });
 
     // Get recent messages for context
     const recentMessages = messageStore.getRecent(threadId, 5);
 
     // Generate response (demo mode)
-    const autoRespond = body.autoRespond ?? true;  // default to auto
+    const shouldAutoRespond = autoRespond ?? true;
     let responseMessage = null;
     let ballActionResult = null;
 
-    if (autoRespond) {
+    if (shouldAutoRespond) {
       const response = generateDemoResponse({
         dogConfig: dogEntry.config,
         l0Prompt,
         recentMessages,
-        triggerContent: body.content ?? 'direct invocation',
+        triggerContent: content ?? 'direct invocation',
       });
 
       // Store the dog's response as a message
@@ -91,7 +74,6 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 
       // Handle ball action
       if (response.ballAction === 'pass' && response.nextTarget) {
-        // Ball gets passed — release current, acquire for next
         ballTracker.release(threadId);
         ballTracker.acquire(threadId, response.nextTarget, `${dogEntry.config.nickname} passed ball`);
         ballActionResult = {
@@ -105,16 +87,15 @@ export function registerA2aRoutes(app: FastifyInstance): void {
           response.holdNextStep ?? 'check and proceed', response.holdWakeAfterMs ?? 300000);
         ballActionResult = { action: 'hold', reason: response.holdReason };
       } else {
-        // Return to creator — release ball
         ballTracker.release(threadId);
         ballActionResult = { action: 'return_to_creator' };
       }
     }
 
     return reply.status(200).send({
-      dogId: body.dogId,
+      dogId: dogIdStr,
       dogName: dogEntry.config.nickname,
-      threadId: body.threadId,
+      threadId: threadIdStr,
       ballState: ballTracker.get(threadId),
       response: responseMessage,
       ballAction: ballActionResult,
@@ -125,22 +106,20 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 
   /** Dog holds the ball while waiting for external conditions */
   app.post('/api/a2a/hold-ball', async (request, reply) => {
-    const body = request.body as HoldBallRequest;
-    if (!body?.threadId || !body?.dogId || !body?.reason || !body?.nextStep) {
-      return reply.status(400).send({ error: 'threadId, dogId, reason, nextStep required' });
+    const parsed = holdBallSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request', details: parsed.error.flatten() });
     }
-    if (body.wakeAfterMs < 5000 || body.wakeAfterMs > 3600000) {
-      return reply.status(400).send({ error: 'wakeAfterMs must be 5000-3600000' });
-    }
+    const { threadId: threadIdStr, dogId: dogIdStr, reason, nextStep, wakeAfterMs } = parsed.data;
 
-    const threadId = createThreadId(body.threadId);
-    const dogId = createDogId(body.dogId);
+    const threadId = createThreadId(threadIdStr);
+    const dogId = createDogId(dogIdStr);
 
     try {
-      const state = ballTracker.hold(threadId, dogId, body.reason, body.nextStep, body.wakeAfterMs);
+      const state = ballTracker.hold(threadId, dogId, reason, nextStep, wakeAfterMs);
       return reply.status(200).send({
         ballState: state,
-        message: `🐕 ${dogRegistry.getOrThrow(dogId).config.nickname} 持球等待：${body.reason}`,
+        message: `🐕 ${dogRegistry.getOrThrow(dogId).config.nickname} 持球等待：${reason}`,
       });
     } catch (err) {
       return reply.status(409).send({ error: (err as Error).message });

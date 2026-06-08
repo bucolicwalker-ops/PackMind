@@ -1,24 +1,37 @@
 /**
- * Message Store — In-memory array storage for messages.
+ * Message Store — Array storage with JSON file persistence.
  *
- * Pattern borrowed from cat-coffee's MessageStore:
- * - Array-based storage (cat-coffee uses array bounded to 2000 messages)
- * - Append-only (messages are added, not edited)
- * - Timestamp-based ordering
- * - @mention parsing integrated with dog registry
+ * Data survives server restarts via data/messages.json.
+ * Pattern: load at startup → append in memory → save on every write.
  *
- * Cat-coffee also stores contentBlocks, origin, visibility.
- * We keep it simple: plain text content only.
+ * Simplified from cat-coffee: plain text content only, no contentBlocks.
  */
 
 import { Message, MessageId, ThreadId, UserId, createMessageId } from '../types/thread.js';
 import { DogId, createDogId } from '../types/ids.js';
 import { dogRegistry } from '../registry/DogRegistry.js';
+import { loadJson, saveJson } from './persistence.js';
 
-const MAX_MESSAGES = 500; // cat-coffee uses 2000; we use less for minimal
+const PERSISTENCE_FILE = 'messages.json';
+const MAX_MESSAGES = 500;
 
 class MessageStore {
   private messages: Message[] = [];
+
+  /** Load persisted data from disk. Call once at startup. */
+  init(): void {
+    const data = loadJson<Message[]>(PERSISTENCE_FILE);
+    if (data) {
+      this.messages = data;
+      console.log(`[MessageStore] Loaded ${this.messages.length} messages from ${PERSISTENCE_FILE}`);
+    } else {
+      console.log('[MessageStore] No persisted data, starting fresh');
+    }
+  }
+
+  private persist(): void {
+    saveJson(PERSISTENCE_FILE, this.messages);
+  }
 
   /** Append a message. Returns the created message. */
   append(threadId: ThreadId, userId: UserId, dogId: DogId | null, content: string): Message {
@@ -44,6 +57,7 @@ class MessageStore {
       this.messages = this.messages.slice(-MAX_MESSAGES);
     }
 
+    this.persist();
     return message;
   }
 
@@ -65,7 +79,7 @@ class MessageStore {
     return this.messages.filter(m => m.mentions.includes(dogId));
   }
 
-  /** Get all messages (for search). Returns a copy to prevent mutation. */
+  /** Get all messages (for search). Returns a copy. */
   getAll(): Message[] {
     return [...this.messages];
   }
@@ -78,20 +92,18 @@ class MessageStore {
   /**
    * Parse @狗名 mentions from message content.
    * Uses longest-match-first to prevent prefix collisions.
-   * Pattern: cat-coffee's findBreedByMention
    */
   private parseMentions(content: string): DogId[] {
     const mentions: DogId[] = [];
     const seen = new Set<string>();
 
-    // Check each dog's mention patterns against the content
     for (const dogId of dogRegistry.getAllIds()) {
       const entry = dogRegistry.getOrThrow(dogId);
       for (const pattern of entry.config.mentionPatterns) {
         if (content.includes(pattern) && !seen.has(dogId as string)) {
           mentions.push(dogId);
           seen.add(dogId as string);
-          break; // one match per dog is enough
+          break;
         }
       }
     }

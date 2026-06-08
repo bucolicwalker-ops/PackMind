@@ -1,21 +1,39 @@
 /**
- * Thread Store — In-memory Map storage for threads.
+ * Thread Store — Map-based storage with JSON file persistence.
  *
- * Pattern borrowed from cat-coffee's ThreadStore:
- * - Map-based storage (cat-coffee's default is ALSO in-memory!)
- * - CRUD operations with runtime validation
- * - No LRU eviction for minimal version (cat-coffee uses LRU with max 100)
+ * Data survives server restarts via data/threads.json.
+ * Pattern: load at startup → mutate in memory → save on every write.
  *
- * Redis key patterns exist in cat-coffee as a migration path.
- * We'll add Redis later when we need persistence across restarts.
+ * Simplified from cat-coffee: no LRU eviction, no Redis migration yet.
  */
 
 import { Thread, ThreadId, createThreadId, UserId } from '../types/thread.js';
 import { DogId } from '../types/ids.js';
 import { dogRegistry } from '../registry/DogRegistry.js';
+import { loadJson, saveJson } from './persistence.js';
+
+const PERSISTENCE_FILE = 'threads.json';
 
 class ThreadStore {
   private map = new Map<string, Thread>();
+
+  /** Load persisted data from disk. Call once at startup. */
+  init(): void {
+    const data = loadJson<Thread[]>(PERSISTENCE_FILE);
+    if (data) {
+      for (const thread of data) {
+        this.map.set(thread.id as string, thread);
+      }
+      console.log(`[ThreadStore] Loaded ${this.map.size} threads from ${PERSISTENCE_FILE}`);
+    } else {
+      console.log('[ThreadStore] No persisted data, starting fresh');
+    }
+  }
+
+  private persist(): void {
+    const data = Array.from(this.map.values());
+    saveJson(PERSISTENCE_FILE, data);
+  }
 
   /** Create a new thread. Returns the created thread. */
   create(userId: UserId, title?: string): Thread {
@@ -26,12 +44,13 @@ class ThreadStore {
       id,
       title: title ?? null,
       createdBy: userId,
-      participants: [], // dogs join when they're mentioned or invoked
+      participants: [],
       lastActiveAt: now,
       createdAt: now,
     };
 
     this.map.set(id as string, thread);
+    this.persist();
     return thread;
   }
 
@@ -61,6 +80,7 @@ class ThreadStore {
     const thread = this.getOrThrow(id);
     thread.title = title;
     thread.lastActiveAt = Date.now();
+    this.persist();
     return thread;
   }
 
@@ -69,17 +89,24 @@ class ThreadStore {
     const thread = this.getOrThrow(id);
     const key = dogId as string;
     if (!thread.participants.includes(dogId)) {
-      // Validate dogId exists in registry
       dogRegistry.assertKnownDogId(key);
       thread.participants = [...thread.participants, dogId];
     }
     thread.lastActiveAt = Date.now();
+    this.persist();
     return thread;
+  }
+
+  /** Reset store — for testing only. */
+  reset(): void {
+    this.map.clear();
   }
 
   /** Delete a thread (hard delete for minimal version). */
   delete(id: ThreadId): boolean {
-    return this.map.delete(id as string);
+    const deleted = this.map.delete(id as string);
+    if (deleted) this.persist();
+    return deleted;
   }
 
   /** Update lastActiveAt timestamp. */
@@ -87,6 +114,7 @@ class ThreadStore {
     const thread = this.tryGet(id);
     if (thread) {
       thread.lastActiveAt = Date.now();
+      this.persist();
     }
   }
 }

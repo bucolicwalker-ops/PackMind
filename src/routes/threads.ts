@@ -1,28 +1,26 @@
 /**
  * Thread REST Routes — CRUD endpoints for threads.
  *
- * Pattern borrowed from cat-coffee's threads.ts routes:
- *   POST /api/threads         → create thread
- *   GET  /api/threads         → list threads
- *   GET  /api/threads/:id     → get thread
- *   PATCH /api/threads/:id    → update thread
- *   DELETE /api/threads/:id   → delete thread
- *
- * Simplified: no soft-delete, no projectPath filter, no search.
+ * All request bodies validated via Zod schemas (schemas.ts).
+ * No `as any` casts — validated types flow into business logic.
  */
 
 import { FastifyInstance } from 'fastify';
 import { threadStore } from '../stores/ThreadStore.js';
-import { createUserId, CreateThreadRequest } from '../types/thread.js';
+import { createUserId } from '../types/thread.js';
+import { createThreadSchema, updateThreadSchema } from './schemas.js';
 
-/** Default user ID — minimal version has single-user auth */
 const DEFAULT_USER = createUserId('default-user');
 
 export function registerThreadRoutes(app: FastifyInstance): void {
   // Create thread
   app.post('/api/threads', async (request, reply) => {
-    const body = request.body as CreateThreadRequest | undefined;
-    const thread = threadStore.create(DEFAULT_USER, body?.title);
+    const parsed = createThreadSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request', details: parsed.error.flatten() });
+    }
+    const { title } = parsed.data;
+    const thread = threadStore.create(DEFAULT_USER, title);
     return reply.status(201).send(thread);
   });
 
@@ -43,9 +41,13 @@ export function registerThreadRoutes(app: FastifyInstance): void {
   });
 
   // Update thread title
-  app.patch<{ Params: { id: string }; Body: { title: string } }>('/api/threads/:id', async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/api/threads/:id', async (request, reply) => {
     const { id } = request.params;
-    const { title } = request.body;
+    const parsed = updateThreadSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request', details: parsed.error.flatten() });
+    }
+    const { title } = parsed.data;
     try {
       const thread = threadStore.updateTitle(id as any, title);
       return reply.send(thread);

@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url';
 
 import { registerCollabTools } from './collab-tools.js';
 import { registerMemoryTools } from './memory-tools.js';
+import { threadStore } from '../stores/ThreadStore.js';
+import { messageStore } from '../stores/MessageStore.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -52,6 +54,10 @@ async function main(): Promise<void> {
   // Initialize dog registry (needed by tools)
   const { initDogRegistry } = await import('../config/dog-config-loader.js');
   initDogRegistry();
+
+  // Initialize stores — load persisted data from disk
+  threadStore.init();
+  messageStore.init();
 
   const server = createMcpServer();
   const transport = new StdioServerTransport();
