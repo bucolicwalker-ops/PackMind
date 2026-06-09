@@ -8,17 +8,20 @@
  */
 
 export interface ToolResult {
-  [x: string]: unknown;
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
+	[x: string]: unknown;
+	content: Array<{ type: "text"; text: string }>;
+	isError?: boolean;
 }
 
 /** Create a successful tool result. */
 export function successResult(text: string): ToolResult {
-  return { content: [{ type: 'text', text }] };
+	return { content: [{ type: "text", text }] };
 }
 
 /** Create an error tool result. */
 export function errorResult(message: string): ToolResult {
-  return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
+	return {
+		content: [{ type: "text", text: `Error: ${message}` }],
+		isError: true,
+	};
 }

@@ -15,15 +15,14 @@
  *   and in-memory stores; MCP tools call those stores directly
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-import { registerCollabTools } from './collab-tools.js';
-import { registerMemoryTools } from './memory-tools.js';
-import { threadStore } from '../stores/ThreadStore.js';
-import { messageStore } from '../stores/MessageStore.js';
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { messageStore } from "../stores/MessageStore.js";
+import { threadStore } from "../stores/ThreadStore.js";
+import { registerCollabTools } from "./collab-tools.js";
+import { registerMemoryTools } from "./memory-tools.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -32,16 +31,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * Registers all tool groups and returns the McpServer instance.
  */
 export function createMcpServer(): McpServer {
-  const server = new McpServer({
-    name: 'dog-cafe-mcp',
-    version: '0.1.0',
-  });
+	const server = new McpServer({
+		name: "dog-cafe-mcp",
+		version: "0.1.0",
+	});
 
-  // Register tool groups
-  registerCollabTools(server);
-  registerMemoryTools(server);
+	// Register tool groups
+	registerCollabTools(server);
+	registerMemoryTools(server);
 
-  return server;
+	return server;
 }
 
 /**
@@ -49,38 +48,39 @@ export function createMcpServer(): McpServer {
  * Called when this file is executed as an entry point.
  */
 async function main(): Promise<void> {
-  console.error('[dog-cafe] MCP Server starting on stdio...');
+	console.error("[dog-cafe] MCP Server starting on stdio...");
 
-  // Initialize dog registry (needed by tools)
-  const { initDogRegistry } = await import('../config/dog-config-loader.js');
-  initDogRegistry();
+	// Initialize dog registry (needed by tools)
+	const { initDogRegistry } = await import("../config/dog-config-loader.js");
+	initDogRegistry();
 
-  // Initialize stores — load persisted data from disk
-  threadStore.init();
-  messageStore.init();
+	// Initialize stores — load persisted data from disk
+	threadStore.init();
+	messageStore.init();
 
-  const server = createMcpServer();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+	const server = createMcpServer();
+	const transport = new StdioServerTransport();
+	await server.connect(transport);
 
-  console.error('[dog-cafe] MCP Server running on stdio');
+	console.error("[dog-cafe] MCP Server running on stdio");
 
-  // Graceful shutdown
-  const shutdown = (signal: string) => {
-    console.error(`[dog-cafe] MCP Server shutting down (${signal})`);
-    process.exit(128 + (signal === 'SIGINT' ? 2 : 15));
-  };
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+	// Graceful shutdown
+	const shutdown = (signal: string) => {
+		console.error(`[dog-cafe] MCP Server shutting down (${signal})`);
+		process.exit(128 + (signal === "SIGINT" ? 2 : 15));
+	};
+	process.on("SIGINT", () => shutdown("SIGINT"));
+	process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 // Only run main() when executed as entry point (not when imported)
-const isEntryPoint = process.argv[1]
-  && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
+const isEntryPoint =
+	process.argv[1] &&
+	resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
 
 if (isEntryPoint) {
-  main().catch((err) => {
-    console.error('[dog-cafe] MCP Server failed:', err);
-    process.exit(1);
-  });
+	main().catch((err) => {
+		console.error("[dog-cafe] MCP Server failed:", err);
+		process.exit(1);
+	});
 }

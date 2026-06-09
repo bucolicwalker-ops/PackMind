@@ -6,9 +6,9 @@
  * See package.json scripts: "start:mcp"
  */
 
-import { startServer } from './server/index.js';
+import { startServer } from "./server/index.js";
 
-startServer().catch(err => {
-  console.error('Failed to start Dog-Coffee:', err);
-  process.exit(1);
+startServer().catch((err) => {
+	console.error("Failed to start Dog-Coffee:", err);
+	process.exit(1);
 });

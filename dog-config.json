@@ -11,8 +11,8 @@
       "avatar": "collie.svg",
       "color": "#E8A87C",
       "mentionPatterns": ["@牧哥", "@边牧", "@collie"],
-      "defaultModel": "glm-5.1",
-      "clientId": "glm",
+      "defaultModel": "qwen3.7-plus",
+      "clientId": "dashscope",
       "teamStrengths": ["系统设计", "深度思考", "架构规划", "耐心引导"],
       "caution": ["过度思考可能导致决策慢", "温柔风格可能在紧急时不够果断"],
       "restrictions": []
@@ -27,8 +27,8 @@
       "avatar": "corgi.svg",
       "color": "#F6D365",
       "mentionPatterns": ["@短腿", "@柯基", "@corgi"],
-      "defaultModel": "glm-5.1",
-      "clientId": "glm",
+      "defaultModel": "qwen3.7-plus",
+      "clientId": "dashscope",
       "teamStrengths": ["视觉设计", "用户体验", "创意表达", "审美直觉"],
       "caution": ["可能过于追求完美而延误进度", "活泼风格可能在严肃讨论时显得不够稳重"],
       "restrictions": []
@@ -43,8 +43,8 @@
       "avatar": "gsd.svg",
       "color": "#8590A6",
       "mentionPatterns": ["@铁铁", "@德牧", "@gsd"],
-      "defaultModel": "glm-5.1",
-      "clientId": "glm",
+      "defaultModel": "qwen3.7-plus",
+      "clientId": "dashscope",
       "teamStrengths": ["代码审查", "质量保障", "规则执行", "安全检测"],
       "caution": ["严肃风格可能让协作氛围偏硬", "规则意识过强可能阻碍创新尝试"],
       "restrictions": []

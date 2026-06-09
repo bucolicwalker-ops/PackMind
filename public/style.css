@@ -1,0 +1,185 @@
+:root {
+  --bg: #FFF8F0;
+  --bg-sidebar: #F7EDE2;
+  --text: #2D3436;
+  --text-muted: #7F8C8D;
+  --border: #E8DCC8;
+  --accent: #FF6B6B;
+  --creator: #4ECDC4;
+  --radius: 12px;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
+  --transition: 0.2s ease;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; font-family: -apple-system, 'PingFang SC', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+
+/* ── Header ────────────────────────── */
+.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; background: linear-gradient(135deg, #F7EDE2 0%, #E8DCC8 100%);
+  border-bottom: 1px solid var(--border); z-index: 10;
+}
+.app-brand { display: flex; align-items: center; gap: 8px; }
+.brand-icon { font-size: 1.4em; }
+.app-brand h1 { font-size: 1.3em; font-weight: 700; }
+.brand-tag { font-size: 0.75em; color: var(--text-muted); margin-left: 4px; }
+
+.ball-indicator {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 20px; background: rgba(255,255,255,0.6);
+  font-size: 0.85em; transition: var(--transition);
+}
+.ball-orb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text-muted); animation: orb-idle 3s ease-in-out infinite;
+}
+.ball-indicator.active .ball-orb {
+  background: var(--accent); animation: orb-active 1.5s ease-in-out infinite;
+}
+.ball-indicator.active { background: rgba(255,107,107,0.1); }
+@keyframes orb-idle { 0%,100%{ opacity:.4 } 50%{ opacity:.7 } }
+@keyframes orb-active { 0%,100%{ transform:scale(1); box-shadow:0 0 4px var(--accent) } 50%{ transform:scale(1.3); box-shadow:0 0 12px var(--accent) } }
+
+/* ── Layout ────────────────────────── */
+.app-layout { display: flex; height: calc(100vh - 52px); }
+.sidebar {
+  width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 12px;
+}
+.chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* ── Sidebar sections ──────────────── */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.section-header h2 { font-size: 0.9em; font-weight: 600; color: var(--text-muted); }
+.btn-icon {
+  background: none; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 1.1em; cursor: pointer; padding: 2px 8px; transition: var(--transition);
+}
+.btn-icon:hover { background: var(--accent); color: white; border-color: var(--accent); }
+
+.thread-list { list-style: none; margin-bottom: 16px; }
+.thread-list li { padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.88em; transition: var(--transition); }
+.thread-list li:hover { background: rgba(0,0,0,0.04); }
+.thread-list li.active { background: rgba(78,205,196,0.12); color: var(--creator); font-weight: 600; }
+.thread-list li .thread-time { font-size: 0.72em; color: var(--text-muted); }
+.thread-empty { color: var(--text-muted); font-size: 0.85em; padding: 12px; text-align: center; }
+
+.dog-section h2 { font-size: 0.9em; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+.dog-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px; border-radius: 8px; margin-bottom: 6px;
+  transition: var(--transition); cursor: pointer;
+}
+.dog-card:hover { background: rgba(0,0,0,0.04); transform: translateX(2px); }
+.dog-avatar {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--dog-color); color: white; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; font-size: 0.85em;
+}
+.dog-info { display: flex; flex-direction: column; }
+.dog-name { font-weight: 600; font-size: 0.9em; }
+.dog-role { font-size: 0.72em; color: var(--text-muted); }
+
+/* ── Chat area ─────────────────────── */
+.chat-header {
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.8); min-height: 44px;
+}
+.chat-title { font-size: 0.95em; font-weight: 600; }
+
+.chat-messages {
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.chat-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 0.9em;
+}
+
+.msg { max-width: 80%; animation: msg-in 0.3s ease; }
+.msg.human { align-self: flex-start; }
+.msg.dog { align-self: flex-start; }
+@keyframes msg-in { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }
+
+.msg-bubble {
+  padding: 10px 14px; border-radius: 14px; font-size: 0.88em; line-height: 1.5;
+  position: relative;
+}
+.msg.human .msg-bubble { background: rgba(78,205,196,0.15); border-left: 3px solid var(--creator); }
+.msg.dog .msg-bubble { background: var(--dog-bg); border-left: 3px solid var(--dog-color); }
+
+.msg-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 0.72em; color: var(--text-muted); }
+.msg-avatar-mini {
+  width: 20px; height: 20px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.65em; color: white; font-weight: 700;
+}
+
+.mention { color: var(--dog-color); font-weight: 600; cursor: pointer; }
+.ball-action {
+  margin-top: 6px; padding: 4px 8px; border-radius: 6px;
+  font-size: 0.72em; color: var(--text-muted); background: rgba(0,0,0,0.04);
+}
+
+/* ── Chat input ────────────────────── */
+.chat-input-area {
+  padding: 12px 20px; border-top: 1px solid var(--border);
+  background: rgba(255,255,255,0.9);
+}
+.input-wrapper { display: flex; gap: 8px; align-items: flex-end; }
+textarea {
+  flex: 1; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: 10px; font-size: 0.88em; resize: none;
+  font-family: inherit; line-height: 1.4; background: var(--bg);
+  transition: var(--transition);
+}
+textarea:focus { border-color: var(--creator); outline: none; box-shadow: 0 0 0 2px rgba(78,205,196,0.2); }
+.btn-send {
+  padding: 8px 16px; border: none; border-radius: 10px;
+  background: var(--creator); color: white; font-weight: 600;
+  cursor: pointer; transition: var(--transition);
+}
+.btn-send:hover:not(:disabled) { background: #3DBDB4; }
+.btn-send:disabled { opacity: 0.4; cursor: default; }
+
+.quick-invokes { display: flex; gap: 6px; margin-top: 6px; }
+.invoke-btn {
+  padding: 3px 10px; border: 1px solid var(--inv-color); border-radius: 8px;
+  background: transparent; color: var(--inv-color); font-size: 0.78em;
+  cursor: pointer; transition: var(--transition);
+}
+.invoke-btn:hover { background: var(--inv-color); color: white; }
+
+/* ── Dialog ────────────────────────── */
+.dialog-overlay {
+  border: none; border-radius: var(--radius); padding: 0;
+  box-shadow: var(--shadow-lg); max-width: 360px; width: 90%;
+}
+.dialog-form { padding: 24px; }
+.dialog-form h3 { margin-bottom: 16px; font-size: 1em; }
+.dialog-form input {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: 8px; font-size: 0.88em; margin-bottom: 16px;
+}
+.dialog-actions { display: flex; gap: 8px; justify-content: flex-end; list-style: none; }
+.btn-primary { padding: 8px 16px; border: none; border-radius: 8px; background: var(--creator); color: white; cursor: pointer; }
+.btn-secondary { padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px; background: none; cursor: pointer; }
+
+/* ── Toast ─────────────────────────── */
+.toast-container { position: fixed; top: 60px; right: 20px; z-index: 100; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  padding: 10px 16px; border-radius: 8px; font-size: 0.85em;
+  background: white; box-shadow: var(--shadow-lg); animation: toast-in 0.3s ease;
+}
+.toast.error { border-left: 3px solid var(--accent); }
+.toast.success { border-left: 3px solid var(--creator); }
+@keyframes toast-in { from { opacity:0; transform:translateX(20px) } to { opacity:1; transform:none } }
+
+/* ── Responsive ────────────────────── */
+@media (max-width: 640px) {
+  .sidebar { width: 100%; max-height: 180px; border-right: none; border-bottom: 1px solid var(--border); }
+  .app-layout { flex-direction: column; }
+  .msg { max-width: 95%; }
+}

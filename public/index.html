@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dog Coffee 🐕</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-brand">
+      <span class="brand-icon">☕🐕</span>
+      <h1>Dog Coffee</h1>
+      <span class="brand-tag">多犬协作 AI 系统</span>
+    </div>
+    <div class="ball-indicator" id="ballIndicator">
+      <span class="ball-orb"></span>
+      <span class="ball-text">球在地上</span>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <aside class="sidebar">
+      <section class="thread-section">
+        <div class="section-header">
+          <h2>线程</h2>
+          <button class="btn-icon" id="btnNewThread" title="新建线程">＋</button>
+        </div>
+        <ul class="thread-list" id="threadList">
+          <li class="thread-empty">暂无线程，点击 + 创建</li>
+        </ul>
+      </section>
+      <section class="dog-section">
+        <h2>狗狗团队</h2>
+        <div class="dog-cards">
+          <div class="dog-card" data-dog="collie">
+            <div class="dog-avatar" style="--dog-color:#E8A87C">牧</div>
+            <div class="dog-info">
+              <span class="dog-name" style="color:#E8A87C">牧哥</span>
+              <span class="dog-role">边牧 · 主架构师</span>
+            </div>
+          </div>
+          <div class="dog-card" data-dog="corgi">
+            <div class="dog-avatar" style="--dog-color:#F6D365">短</div>
+            <div class="dog-info">
+              <span class="dog-name" style="color:#F6D365">短腿</span>
+              <span class="dog-role">柯基 · 设计师</span>
+            </div>
+          </div>
+          <div class="dog-card" data-dog="gsd">
+            <div class="dog-avatar" style="--dog-color:#8590A6">铁</div>
+            <div class="dog-info">
+              <span class="dog-name" style="color:#8590A6">铁铁</span>
+              <span class="dog-role">德牧 · 纪律守护</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <main class="chat-area">
+      <div class="chat-header" id="chatHeader">
+        <h2 class="chat-title">选择一个线程开始对话</h2>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-empty">从左侧选择线程，或创建新线程开始对话 🐾</div>
+      </div>
+      <div class="chat-input-area" id="chatInputArea">
+        <div class="input-wrapper">
+          <textarea id="messageInput" placeholder="输入消息… 使用 @牧哥 @短腿 @铁铁 呼唤狗狗" rows="2"></textarea>
+          <button class="btn-send" id="btnSend" disabled>发送</button>
+        </div>
+        <div class="quick-invokes">
+          <button class="invoke-btn" data-dog="collie" style="--inv-color:#E8A87C">@牧哥</button>
+          <button class="invoke-btn" data-dog="corgi" style="--inv-color:#F6D365">@短腿</button>
+          <button class="invoke-btn" data-dog="gsd" style="--inv-color:#8590A6">@铁铁</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <dialog class="dialog-overlay" id="newThreadDialog">
+    <form method="dialog" class="dialog-form">
+      <h3>创建新线程</h3>
+      <input type="text" id="newThreadTitle" placeholder="线程标题（可选）" maxlength="200">
+      <menu class="dialog-actions">
+        <button type="submit" class="btn-primary">创建</button>
+        <button type="button" class="btn-secondary" id="btnCancelThread">取消</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="app.js"></script>
+</body>
+</html>
