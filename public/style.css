@@ -70,9 +70,18 @@ html, body { height: 100%; font-family: -apple-system, 'PingFang SC', 'Segoe UI'
 .dog-card {
   display: flex; align-items: center; gap: 10px;
   padding: 8px; border-radius: 8px; margin-bottom: 6px;
-  transition: var(--transition); cursor: pointer;
+  transition: var(--transition); cursor: pointer; position: relative;
 }
-.dog-card:hover { background: rgba(0,0,0,0.04); transform: translateX(2px); }
+.dog-card:hover { background: rgba(0,0,0,0.05); transform: translateX(2px); }
+.dog-card::after {
+  content: '呼唤 →'; position: absolute; right: 10px;
+  font-size: 0.7em; color: var(--text-muted); opacity: 0;
+  transition: var(--transition);
+}
+.dog-card:hover::after { opacity: 1; }
+.dog-card.disabled { opacity: 0.5; cursor: default; }
+.dog-card.disabled:hover { background: none; transform: none; }
+.dog-card.disabled:hover::after { opacity: 0; }
 .dog-avatar {
   width: 36px; height: 36px; border-radius: 10px;
   background: var(--dog-color); color: white; font-weight: 700;
@@ -89,6 +98,46 @@ html, body { height: 100%; font-family: -apple-system, 'PingFang SC', 'Segoe UI'
 }
 .chat-title { font-size: 0.95em; font-weight: 600; }
 
+/* ── Chain overview bar (协作链概览) ── */
+.chain-overview {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  margin-top: 8px; min-height: 0; transition: var(--transition);
+}
+.chain-overview:empty { margin-top: 0; }
+.chain-node {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px 3px 4px; border-radius: 20px;
+  background: var(--chain-bg); border: 1px solid var(--chain-color);
+  font-size: 0.74em; font-weight: 600; color: var(--chain-color);
+  animation: chain-pop 0.4s ease backwards;
+}
+.chain-node .node-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--chain-color); color: white;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.78em; font-weight: 700;
+}
+.chain-arrow {
+  position: relative; width: 24px; height: 2px; border-radius: 2px;
+  background: var(--border); flex-shrink: 0;
+}
+.chain-arrow::after {
+  content: ''; position: absolute; right: -1px; top: -2px;
+  border: 3px solid transparent; border-left-color: var(--text-muted);
+}
+/* The rolling ball that animates along each arrow */
+.chain-arrow .rolling-ball {
+  position: absolute; top: -3px; left: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 6px var(--accent);
+  animation: roll-along 0.6s ease forwards;
+}
+@keyframes roll-along { from { left: 0; opacity: 1 } to { left: 18px; opacity: 1 } }
+@keyframes chain-pop { from { opacity: 0; transform: scale(0.8) } to { opacity: 1; transform: scale(1) } }
+.chain-label {
+  font-size: 0.72em; color: var(--text-muted); margin-right: 2px; font-weight: 500;
+}
+
 .chat-messages {
   flex: 1; overflow-y: auto; padding: 16px 20px;
   display: flex; flex-direction: column; gap: 12px;
@@ -98,29 +147,48 @@ html, body { height: 100%; font-family: -apple-system, 'PingFang SC', 'Segoe UI'
   color: var(--text-muted); font-size: 0.9em;
 }
 
-.msg { max-width: 80%; animation: msg-in 0.3s ease; }
-.msg.human { align-self: flex-start; }
+.msg { max-width: 78%; animation: msg-in 0.3s ease; }
+.msg.human { align-self: flex-end; }
 .msg.dog { align-self: flex-start; }
+.msg.human .msg-meta { flex-direction: row-reverse; }
 @keyframes msg-in { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }
 
 .msg-bubble {
-  padding: 10px 14px; border-radius: 14px; font-size: 0.88em; line-height: 1.5;
-  position: relative;
+  padding: 10px 14px; border-radius: 16px; font-size: 0.88em; line-height: 1.6;
+  position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  word-break: break-word; white-space: pre-wrap;
 }
-.msg.human .msg-bubble { background: rgba(78,205,196,0.15); border-left: 3px solid var(--creator); }
-.msg.dog .msg-bubble { background: var(--dog-bg); border-left: 3px solid var(--dog-color); }
+.msg.human .msg-bubble { background: rgba(78,205,196,0.16); border-bottom-right-radius: 4px; }
+.msg.dog .msg-bubble { background: var(--dog-bg); border-left: 3px solid var(--dog-color); border-bottom-left-radius: 4px; }
 
 .msg-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 0.72em; color: var(--text-muted); }
 .msg-avatar-mini {
   width: 20px; height: 20px; border-radius: 6px;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.65em; color: white; font-weight: 700;
+  font-size: 0.65em; color: white; font-weight: 700; flex-shrink: 0;
 }
 
 .mention { color: var(--dog-color); font-weight: 600; cursor: pointer; }
 .ball-action {
-  margin-top: 6px; padding: 4px 8px; border-radius: 6px;
-  font-size: 0.72em; color: var(--text-muted); background: rgba(0,0,0,0.04);
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 6px; padding: 3px 10px; border-radius: 10px;
+  font-size: 0.72em; color: var(--dog-color); font-weight: 600;
+  background: var(--dog-bg); border: 1px solid var(--dog-color);
+}
+
+/* ── Thinking indicator (real model has latency) ── */
+.msg.thinking .msg-bubble { background: var(--dog-bg); border-left: 3px solid var(--dog-color); }
+.typing { display: inline-flex; gap: 5px; align-items: center; padding: 2px 0; }
+.typing .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--dog-color); opacity: 0.4;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing .dot:nth-child(2) { animation-delay: 0.18s; }
+.typing .dot:nth-child(3) { animation-delay: 0.36s; }
+@keyframes typing-bounce {
+  0%,60%,100% { transform: translateY(0); opacity: 0.4 }
+  30% { transform: translateY(-5px); opacity: 1 }
 }
 
 /* ── Chat input ────────────────────── */

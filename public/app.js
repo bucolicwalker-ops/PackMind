@@ -85,10 +85,13 @@ async function loadMessages() {
   const container = document.getElementById('chatMessages');
   if (!msgs.length) {
     container.innerHTML = '<div class="chat-empty">发送第一条消息开始对话 🐾</div>';
+    const bar = document.getElementById('chainOverview');
+    if (bar) bar.innerHTML = '';
     return;
   }
   container.innerHTML = msgs.map(renderMsg).join('');
   container.scrollTop = container.scrollHeight;
+  renderChainOverview(msgs);
 }
 
 function renderMsg(m) {
@@ -101,9 +104,17 @@ function renderMsg(m) {
   const content = highlightMentions(m.content);
   const time = fmtTime(m.timestamp);
 
+  // Ball-pass trace: reconstruct "who got passed the ball" from the @mention
+  // in this dog's own reply (data source is the persisted message, not the
+  // lossy chainInvokes field — survives refresh).
   let ballAction = '';
-  if (isDog && (m.content.includes('传球给') || m.content.includes('传给'))) {
-    ballAction = `<div class="ball-action">⚡ 球权转移</div>`;
+  if (isDog) {
+    const target = firstMentionedDog(m.content);
+    if (target && target !== m.dogId) {
+      const tgt = DOGS[target];
+      ballAction = `<div class="ball-action" style="--dog-color:${tgt.color};--dog-bg:${hexToRGBA(tgt.color,0.14)}">
+        🐾 传球给 <strong>${tgt.name}</strong></div>`;
+    }
   }
 
   return `<div class="msg ${cls}" style="--dog-color:${dog?.color || '#4ECDC4'};--dog-bg:${dogBg}">
@@ -115,6 +126,44 @@ function renderMsg(m) {
     <div class="msg-bubble">${content}</div>
     ${ballAction}
   </div>`;
+}
+
+// Return the dogId of the first @mention in text, or null.
+function firstMentionedDog(text) {
+  const map = { '@牧哥':'collie', '@边牧':'collie', '@短腿':'corgi', '@柯基':'corgi', '@铁铁':'gsd', '@德牧':'gsd' };
+  let best = null, bestIdx = Infinity;
+  for (const [pat, dogId] of Object.entries(map)) {
+    const idx = text.indexOf(pat);
+    if (idx !== -1 && idx < bestIdx) { bestIdx = idx; best = dogId; }
+  }
+  return best;
+}
+
+// ── Chain overview (协作链概览) ────────
+// Walk the message timeline, build the sequence of dogs the ball flowed
+// through. Render as a node→arrow→node track at the top of the chat.
+function renderChainOverview(msgs) {
+  const bar = document.getElementById('chainOverview');
+  if (!bar) return;
+  // Collect dog speakers in order (collapse immediate repeats)
+  const chain = [];
+  for (const m of msgs) {
+    if (m.dogId && DOGS[m.dogId]) {
+      if (chain[chain.length - 1] !== m.dogId) chain.push(m.dogId);
+    }
+  }
+  if (chain.length < 2) { bar.innerHTML = ''; return; }  // need a real chain
+
+  let html = '<span class="chain-label">🔗 协作链</span>';
+  chain.forEach((dogId, i) => {
+    const dog = DOGS[dogId];
+    html += `<span class="chain-node" style="--chain-color:${dog.color};--chain-bg:${hexToRGBA(dog.color,0.12)};animation-delay:${i*0.08}s">
+      <span class="node-dot" style="background:${dog.color}">${dog.name[0]}</span>${dog.name}</span>`;
+    if (i < chain.length - 1) {
+      html += `<span class="chain-arrow"><span class="rolling-ball" style="animation-delay:${i*0.08+0.2}s"></span></span>`;
+    }
+  });
+  bar.innerHTML = html;
 }
 
 function hexToRGBA(hex, alpha) {
@@ -175,6 +224,7 @@ function parseMentions(text) {
 // ── Invoke dog ─────────────────────────
 async function invokeDog(dogId) {
   if (!currentThread) return;
+  showThinking(dogId);  // real model has latency — show "思考中" feedback
   try {
     const result = await api('/a2a/invoke', {
       method: 'POST',
@@ -183,7 +233,38 @@ async function invokeDog(dogId) {
     if (result.response) toast(`${DOGS[dogId].name} 回复了！`, 'success');
     await loadMessages();
     await loadBallState();
-  } catch (e) { /* toast already shown */ }
+  } catch (e) {
+    clearThinking();  // on error, loadMessages won't run — clear manually
+  }
+}
+
+// ── Thinking indicator ─────────────────
+function showThinking(dogId) {
+  const dog = DOGS[dogId];
+  if (!dog) return;
+  const container = document.getElementById('chatMessages');
+  // Remove the "empty" placeholder if present
+  const empty = container.querySelector('.chat-empty');
+  if (empty) empty.remove();
+  const el = document.createElement('div');
+  el.className = 'msg dog thinking';
+  el.id = 'thinkingBubble';
+  el.style.setProperty('--dog-color', dog.color);
+  el.style.setProperty('--dog-bg', hexToRGBA(dog.color, 0.12));
+  el.innerHTML = `
+    <div class="msg-meta">
+      <span class="msg-avatar-mini" style="background:${dog.color}">${dog.name[0]}</span>
+      <strong style="color:${dog.color}">${dog.name}</strong>
+      <span>思考中…</span>
+    </div>
+    <div class="msg-bubble"><span class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>`;
+  container.append(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+function clearThinking() {
+  const el = document.getElementById('thinkingBubble');
+  if (el) el.remove();
 }
 
 // ── Ball state ─────────────────────────
@@ -224,13 +305,18 @@ async function createThread(e) {
   await selectThread(thread.id);
 }
 
-// ── Quick invoke buttons ───────────────
+// ── Quick invoke buttons + dog cards ───
 function setupQuickInvokes() {
+  const invoke = async (dogId) => {
+    if (!currentThread) { toast('请先选择或创建线程', 'error'); return; }
+    await invokeDog(dogId);
+  };
   document.querySelectorAll('.invoke-btn').forEach(btn => {
-    btn.onclick = async () => {
-      if (!currentThread) { toast('请先选择线程', 'error'); return; }
-      await invokeDog(btn.dataset.dog);
-    };
+    btn.onclick = () => invoke(btn.dataset.dog);
+  });
+  // Dog cards in sidebar are also clickable to summon
+  document.querySelectorAll('.dog-card').forEach(card => {
+    card.onclick = () => invoke(card.dataset.dog);
   });
 }
 
