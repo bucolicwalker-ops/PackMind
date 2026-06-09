@@ -24,6 +24,17 @@ async function api(path, opts = {}) {
   }
 }
 
+// ── HTML escape (XSS guard) ────────────
+// Model replies + user-entered titles are untrusted. Escape before innerHTML.
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Toast ──────────────────────────────
 function toast(msg, type = 'success') {
   const el = document.createElement('div');
@@ -42,8 +53,8 @@ async function loadThreads() {
     return;
   }
   list.innerHTML = threads.map(t => `
-    <li data-id="${t.id}" class="${currentThread?.id === t.id ? 'active' : ''}">
-      ${t.title || '未命名线程'}
+    <li data-id="${escapeHtml(t.id)}" class="${currentThread?.id === t.id ? 'active' : ''}">
+      ${escapeHtml(t.title || '未命名线程')}
       <br><span class="thread-time">${fmtTime(t.lastActiveAt)}</span>
     </li>
   `).join('');
@@ -115,7 +126,8 @@ function hexToRGBA(hex, alpha) {
 
 function highlightMentions(text) {
   const patterns = { '@牧哥':'collie', '@边牧':'collie', '@短腿':'corgi', '@柯基':'corgi', '@铁铁':'gsd', '@德牧':'gsd' };
-  let result = text;
+  // Escape FIRST (untrusted model output), then inject mention spans into safe text.
+  let result = escapeHtml(text);
   for (const [pat, dogId] of Object.entries(patterns)) {
     result = result.replace(new RegExp(pat, 'g'), `<span class="mention" style="--dog-color:${DOGS[dogId].color}">${pat}</span>`);
   }

@@ -13,6 +13,7 @@
  */
 
 import type { ProviderConfig } from "../types/model-config.js";
+import { redactSecrets } from "./redact.js";
 
 export interface ChatMessage {
 	role: "system" | "user" | "assistant";
@@ -42,10 +43,10 @@ export async function callOpenAICompatible(
 	provider: ProviderConfig,
 	messages: ChatMessage[],
 	overrides?: { model?: string; maxTokens?: number; temperature?: number },
-): Promise<ModelResponse> {
-	// Skip if no API key — caller should fall back to demo
+): Promise<ModelResponse | null> {
+	// No API key → return null (caller falls back to demo). Honest type, no lie.
 	if (!provider.apiKey || provider.apiKey.trim().length === 0) {
-		return null as unknown as ModelResponse;
+		return null;
 	}
 
 	const model = overrides?.model ?? provider.defaultModel;
@@ -70,8 +71,9 @@ export async function callOpenAICompatible(
 
 	if (!response.ok) {
 		const text = await response.text();
+		// Redact any sk- key pattern before throwing (P1: error bodies may echo the key)
 		throw new Error(
-			`Model API error (${response.status}): ${text.slice(0, 500)}`,
+			`Model API error (${response.status}): ${redactSecrets(text.slice(0, 500))}`,
 		);
 	}
 

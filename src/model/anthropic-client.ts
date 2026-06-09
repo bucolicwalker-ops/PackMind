@@ -10,6 +10,7 @@
  */
 
 import type { ProviderConfig } from "../types/model-config.js";
+import { redactSecrets } from "./redact.js";
 
 export interface AnthropicMessage {
 	role: "user" | "assistant";
@@ -32,9 +33,10 @@ export async function callAnthropicCompatible(
 	systemPrompt: string,
 	messages: AnthropicMessage[],
 	overrides?: { model?: string; maxTokens?: number; temperature?: number },
-): Promise<AnthropicModelResponse> {
+): Promise<AnthropicModelResponse | null> {
+	// No API key → return null (caller falls back to demo). Honest type, no lie.
 	if (!provider.apiKey || provider.apiKey.trim().length === 0) {
-		return null as unknown as AnthropicModelResponse;
+		return null;
 	}
 
 	const model = overrides?.model ?? provider.defaultModel;
@@ -61,8 +63,9 @@ export async function callAnthropicCompatible(
 
 	if (!response.ok) {
 		const text = await response.text();
+		// Redact any sk- key pattern before throwing (P1: error bodies may echo the key)
 		throw new Error(
-			`Anthropic API error (${response.status}): ${text.slice(0, 500)}`,
+			`Anthropic API error (${response.status}): ${redactSecrets(text.slice(0, 500))}`,
 		);
 	}
 
