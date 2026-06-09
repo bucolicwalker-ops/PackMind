@@ -8,6 +8,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { ballTracker } from "../a2a/BallTracker.js";
+import { computeOwnBallAction } from "../a2a/ball-action.js";
 import { loadModelConfig } from "../model/model-config-loader.js";
 import { dogRegistry } from "../registry/DogRegistry.js";
 import {
@@ -34,7 +35,11 @@ async function invokeDog(
 ): Promise<{
 	response: ResponderOutput;
 	responseMessage: any;
+	/** Final ball state after the WHOLE sub-chain settles (reflects chain tail). */
 	ballActionResult: any;
+	/** This dog's OWN ball decision at this hop — never overwritten by recursion.
+	 *  Distinct from ballActionResult so chainInvokes can record per-hop truth. */
+	ownBallAction: any;
 	chainInvokes: Array<{
 		dogId: string;
 		dogName: string;
@@ -111,11 +116,14 @@ async function invokeDog(
 				currentDepth + 1,
 			);
 
+			// Record nextDog's OWN hop decision (ownBallAction), NOT the chain-tail
+			// state (ballActionResult). The latter is overwritten by deeper recursion
+			// and would mislabel every hop with the same final value.
 			chainInvokes.push({
 				dogId: nextDogId,
 				dogName: nextDogName,
 				response: chainResult.responseMessage,
-				ballAction: chainResult.ballActionResult,
+				ballAction: chainResult.ownBallAction,
 			});
 
 			// Append deeper chain results
@@ -138,7 +146,25 @@ async function invokeDog(
 		ballActionResult = { action: "return_to_creator" };
 	}
 
-	return { response, responseMessage, ballActionResult, chainInvokes };
+	// ownBallAction = this dog's decision at THIS hop, captured independently of
+	// recursion (which overwrites ballActionResult with the chain-tail state).
+	const ownBallAction = computeOwnBallAction(
+		response.ballAction,
+		dogId,
+		response.nextTarget,
+		response.nextTarget
+			? dogRegistry.getOrThrow(response.nextTarget).config.nickname
+			: undefined,
+		response.holdReason,
+	);
+
+	return {
+		response,
+		responseMessage,
+		ballActionResult,
+		ownBallAction,
+		chainInvokes,
+	};
 }
 
 export function registerA2aRoutes(app: FastifyInstance): void {
