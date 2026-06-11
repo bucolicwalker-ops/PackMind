@@ -82,12 +82,15 @@ async function selectThread(id) {
 // ── Live polling (auto-refresh without manual reload) ──
 let pollTimer = null;
 let lastMsgCount = 0;
+let isInvoking = false; // true while a dog is "thinking" — pause poll re-render
+                        // so the thinking bubble isn't wiped out mid-call
 
 function startPolling() {
   stopPolling();
-  lastMsgCount = 0;
-  // Poll every 3s; only re-render when the message count actually changed,
-  // so the view doesn't flicker while nothing new has arrived.
+  // Don't reset lastMsgCount — selectThread already ran loadMessages() which set
+  // it to the current count. Resetting to 0 would force a spurious re-render (and
+  // scroll-to-bottom, interrupting history reading) on the very first poll.
+  // Poll every 3s; only re-render when the message count actually changed.
   pollTimer = setInterval(pollOnce, 3000);
 }
 
@@ -97,6 +100,7 @@ function stopPolling() {
 
 async function pollOnce() {
   if (!currentThread) return;
+  if (isInvoking) return;  // a dog is thinking — don't repaint over its bubble
   try {
     const msgs = await api(`/messages?threadId=${currentThread.id}&limit=50`);
     if (msgs.length !== lastMsgCount) {
@@ -257,6 +261,7 @@ function parseMentions(text) {
 // ── Invoke dog ─────────────────────────
 async function invokeDog(dogId) {
   if (!currentThread) return;
+  isInvoking = true;    // pause poll re-render so it won't wipe the thinking bubble
   showThinking(dogId);  // real model has latency — show "思考中" feedback
   try {
     const result = await api('/a2a/invoke', {
@@ -268,6 +273,8 @@ async function invokeDog(dogId) {
     await loadBallState();
   } catch (e) {
     clearThinking();  // on error, loadMessages won't run — clear manually
+  } finally {
+    isInvoking = false;  // re-enable polling once this dog is done
   }
 }
 
