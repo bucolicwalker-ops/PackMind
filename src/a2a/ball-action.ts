@@ -74,8 +74,13 @@ interface HopBallAction {
 	toName?: string;
 }
 
-/** A chain invoke entry (shape of invokeDog's chainInvokes[]). */
-interface ChainInvokeEntry {
+/**
+ * Loose INPUT shape accepted by buildChainPath — the minimum it reads from each
+ * chain entry. Deliberately permissive (optional fields) so callers can pass
+ * their own richer chainInvokes entries without a type cast. Distinct from
+ * a2a.ts's stricter ChainInvokeEntry (the actual invokeDog return shape).
+ */
+interface ChainHopInput {
 	dogName?: string;
 	ballAction?: HopBallAction | null;
 }
@@ -95,7 +100,7 @@ interface ChainInvokeEntry {
 export function buildChainPath(
 	firstOwnAction: HopBallAction | null | undefined,
 	firstFromName: string,
-	chainInvokes: ReadonlyArray<ChainInvokeEntry>,
+	chainInvokes: ReadonlyArray<ChainHopInput>,
 ): ChainHop[] {
 	const path: ChainHop[] = [];
 
