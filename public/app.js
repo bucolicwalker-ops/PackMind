@@ -209,12 +209,26 @@ function hexToRGBA(hex, alpha) {
 
 function highlightMentions(text) {
   const patterns = { '@牧哥':'collie', '@边牧':'collie', '@短腿':'corgi', '@柯基':'corgi', '@铁铁':'gsd', '@德牧':'gsd' };
-  // Escape FIRST (untrusted model output), then inject mention spans into safe text.
-  let result = escapeHtml(text);
-  for (const [pat, dogId] of Object.entries(patterns)) {
-    result = result.replace(new RegExp(pat, 'g'), `<span class="mention" style="--dog-color:${DOGS[dogId].color}">${pat}</span>`);
-  }
-  return result;
+  // WYSIWYG with the backend: only a LINE-START @ is a real ball-pass
+  // (backend parseResponse uses /^\s*-?\s*@/). A mid-sentence @ is just the dog
+  // *mentioning* a teammate ("确认后我 @柯基 来定视觉"), not passing the ball —
+  // so it stays plain text. This way a colored @ badge always means a real pass.
+  // Escape FIRST (untrusted model output), then highlight per-line.
+  return text.split('\n').map(line => {
+    const escaped = escapeHtml(line);
+    // Does this line START with an @mention? (optional leading space / list dash)
+    const lead = line.match(/^(\s*-?\s*)(@\S+)/);
+    if (!lead) return escaped;  // no line-start @ → plain text, no highlight
+    // Highlight only the line-start mention; mid-line @ stays plain.
+    for (const [pat, dogId] of Object.entries(patterns)) {
+      if (lead[2].startsWith(pat)) {
+        const prefix = escapeHtml(lead[1]);
+        const rest = escapeHtml(line.slice(lead[1].length + pat.length));
+        return `${prefix}<span class="mention" style="--dog-color:${DOGS[dogId].color}">${pat}</span>${rest}`;
+      }
+    }
+    return escaped;  // line-start @ but not a known dog → plain text
+  }).join('\n');
 }
 
 // ── Send message ───────────────────────
@@ -263,29 +277,46 @@ async function invokeDog(dogId) {
   if (!currentThread) return;
   isInvoking = true;    // pause poll re-render so it won't wipe the thinking bubble
   showThinking(dogId);  // real model has latency — show "思考中" feedback
+  showChainProgress(0); // "协作进行中…" banner — backend may run a whole chain in one call
   try {
     const result = await api('/a2a/invoke', {
       method: 'POST',
       body: JSON.stringify({ threadId: currentThread.id, dogId, autoRespond: true }),
     });
+    // Backend runs the full chain in one call; reflect the real hop count.
+    const hops = Array.isArray(result.chainInvokes) ? result.chainInvokes.length : 0;
+    if (hops > 0) {
+      // A chain actually formed — briefly show "回答中" for the relay + hop count.
+      const lastHop = result.chainInvokes[hops - 1];
+      const relayId = lastHop?.dogId;
+      if (relayId && DOGS[relayId]) showThinking(relayId, 'answering');
+      showChainProgress(hops);
+      await sleep(700);  // let the user register the chain happened
+    }
     if (result.response) toast(`${DOGS[dogId].name} 回复了！`, 'success');
     await loadMessages();
     await loadBallState();
   } catch (e) {
     clearThinking();  // on error, loadMessages won't run — clear manually
   } finally {
-    isInvoking = false;  // re-enable polling once this dog is done
+    isInvoking = false;     // re-enable polling once this dog is done
+    hideChainProgress();
   }
 }
 
-// ── Thinking indicator ─────────────────
-function showThinking(dogId) {
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Thinking / answering indicator ─────
+// phase: 'thinking' (刚唤醒，模型生成中) | 'answering' (链式接力，正在回答)
+function showThinking(dogId, phase = 'thinking') {
   const dog = DOGS[dogId];
   if (!dog) return;
   const container = document.getElementById('chatMessages');
   // Remove the "empty" placeholder if present
   const empty = container.querySelector('.chat-empty');
   if (empty) empty.remove();
+  clearThinking();  // never stack two bubbles
+  const label = phase === 'answering' ? '回答中' : '思考中';
   const el = document.createElement('div');
   el.className = 'msg dog thinking';
   el.id = 'thinkingBubble';
@@ -295,7 +326,7 @@ function showThinking(dogId) {
     <div class="msg-meta">
       <span class="msg-avatar-mini" style="background:${dog.color}">${dog.name[0]}</span>
       <strong style="color:${dog.color}">${dog.name}</strong>
-      <span>思考中…</span>
+      <span class="msg-phase ${phase}" style="--dog-color:${dog.color}">${label}…</span>
     </div>
     <div class="msg-bubble"><span class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>`;
   container.append(el);
@@ -305,6 +336,23 @@ function showThinking(dogId) {
 function clearThinking() {
   const el = document.getElementById('thinkingBubble');
   if (el) el.remove();
+}
+
+// ── Chain-in-progress banner ───────────
+// Long chains take a while; tell the user "协作还在进行，别以为卡住了".
+function showChainProgress(hops) {
+  const bar = document.getElementById('chainProgress');
+  if (!bar) return;
+  const txt = bar.querySelector('.cp-text');
+  txt.innerHTML = hops > 0
+    ? `协作链进行中 · 已传球 <span class="cp-hops">${hops}</span> 跳…`
+    : '协作进行中…';
+  bar.classList.add('active');
+}
+
+function hideChainProgress() {
+  const bar = document.getElementById('chainProgress');
+  if (bar) bar.classList.remove('active');
 }
 
 // ── Ball state ─────────────────────────
