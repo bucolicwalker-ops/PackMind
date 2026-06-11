@@ -76,12 +76,42 @@ async function selectThread(id) {
   await loadMessages();
   await loadBallState();
   loadThreads(); // refresh active state
+  startPolling(); // auto-refresh new messages (e.g. chain-invoke replies)
+}
+
+// ── Live polling (auto-refresh without manual reload) ──
+let pollTimer = null;
+let lastMsgCount = 0;
+
+function startPolling() {
+  stopPolling();
+  lastMsgCount = 0;
+  // Poll every 3s; only re-render when the message count actually changed,
+  // so the view doesn't flicker while nothing new has arrived.
+  pollTimer = setInterval(pollOnce, 3000);
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+async function pollOnce() {
+  if (!currentThread) return;
+  try {
+    const msgs = await api(`/messages?threadId=${currentThread.id}&limit=50`);
+    if (msgs.length !== lastMsgCount) {
+      lastMsgCount = msgs.length;
+      await loadMessages();
+      await loadBallState();
+    }
+  } catch { /* transient error — keep polling */ }
 }
 
 // ── Messages ───────────────────────────
 async function loadMessages() {
   if (!currentThread) return;
   const msgs = await api(`/messages?threadId=${currentThread.id}&limit=50`);
+  lastMsgCount = msgs.length; // keep poll baseline in sync to avoid a redundant refresh
   const container = document.getElementById('chatMessages');
   if (!msgs.length) {
     container.innerHTML = '<div class="chat-empty">发送第一条消息开始对话 🐾</div>';
@@ -198,8 +228,11 @@ async function sendMessage() {
       body: JSON.stringify({ content, threadId: currentThread.id }),
     });
 
+    // Route to @mentioned dogs. If nobody is @mentioned, the architect
+    // (牧哥/collie) is the default greeter so a bare request never goes unanswered.
     const mentionedDogs = parseMentions(content);
-    for (const dogId of mentionedDogs) {
+    const targets = mentionedDogs.length ? mentionedDogs : ['collie'];
+    for (const dogId of targets) {
       await invokeDog(dogId);
     }
 
