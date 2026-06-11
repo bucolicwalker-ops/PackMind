@@ -162,15 +162,21 @@ function renderMsg(m) {
   </div>`;
 }
 
-// Return the dogId of the first @mention in text, or null.
+// Return the dogId of the first LINE-START @mention (a real ball pass), or null.
+// Must match the same rule as the backend (parseResponse: /^\s*-?\s*@/) and
+// highlightMentions — a mid-sentence @ is just "mentioning", not a pass, so it
+// must NOT trigger a ball-pass badge. Reconstructed from the persisted message
+// (not the non-persisted chainPath) so the badge survives a page refresh.
 function firstMentionedDog(text) {
   const map = { '@牧哥':'collie', '@边牧':'collie', '@短腿':'corgi', '@柯基':'corgi', '@铁铁':'gsd', '@德牧':'gsd' };
-  let best = null, bestIdx = Infinity;
-  for (const [pat, dogId] of Object.entries(map)) {
-    const idx = text.indexOf(pat);
-    if (idx !== -1 && idx < bestIdx) { bestIdx = idx; best = dogId; }
+  for (const line of text.split('\n')) {
+    const lead = line.match(/^(\s*-?\s*)(@\S+)/); // line-start @ only (mirrors backend)
+    if (!lead) continue;
+    for (const [pat, dogId] of Object.entries(map)) {
+      if (lead[2].startsWith(pat)) return dogId;
+    }
   }
-  return best;
+  return null;
 }
 
 // ── Chain overview (协作链概览) ────────
