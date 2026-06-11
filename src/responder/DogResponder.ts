@@ -27,6 +27,7 @@ import {
 	type ChatMessage,
 	callOpenAICompatible,
 } from "../model/openai-compatible-client.js";
+import { redactSecrets } from "../model/redact.js";
 import { dogRegistry } from "../registry/DogRegistry.js";
 import type { DogConfig } from "../types/dog-breed.js";
 import { createDogId, type DogId } from "../types/ids.js";
@@ -51,6 +52,41 @@ export interface ResponderOutput {
 	mode: "real" | "demo";
 	/** Model used for real mode calls */
 	modelUsed?: string;
+	/**
+	 * True when the model was EXPECTED to run but failed (empty response /
+	 * exception) and we fell back to demo. Distinct from intentional demo
+	 * (no API key configured). Surfaces silent failures so they're visible.
+	 */
+	degraded?: boolean;
+	/** Human-readable reason for the degrade (only set when degraded=true). */
+	degradeReason?: string;
+}
+
+/**
+ * Build a SAFE degraded response when the model was expected to run but failed.
+ *
+ * Why not reuse the demo template's ball action (铲屎官 insight — fault tolerance):
+ * The demo template hard-codes a pass target (e.g. corgi → collie). On a real
+ * failure, honoring that fake pass would DISTORT the collaboration chain with
+ * fabricated routing. Like a catch block: on failure, stop safely (return to
+ * creator) rather than fabricate forward progress. The text is still the demo
+ * persona reply (so the UI isn't blank), but the ball SAFELY returns to 铲屎官.
+ */
+export function buildDegradedResponse(
+	input: ResponderInput,
+	reason: string,
+): ResponderOutput {
+	const demo = generateDemoResponse(input);
+	return {
+		...demo,
+		// Override the demo template's fabricated pass — fail safe, don't fake routing.
+		ballAction: "return_to_creator",
+		nextTarget: undefined,
+		mentions: [],
+		mode: "demo",
+		degraded: true,
+		degradeReason: reason,
+	};
 }
 
 // ─── Response Parser ───
@@ -207,11 +243,10 @@ export async function callModelResponder(
 			);
 
 			if (!response || !response.content) {
-				console.log(
-					"[DogResponder] Empty Anthropic response, falling back to demo",
+				console.warn(
+					`[DogResponder] DEGRADED: empty Anthropic response for "${dogId}" — failing safe (return to creator)`,
 				);
-				const demo = generateDemoResponse(input);
-				return { ...demo, mode: "demo" };
+				return buildDegradedResponse(input, "模型返回空响应 (Anthropic)");
 			}
 			responseContent = response.content;
 			responseModel = response.model;
@@ -242,11 +277,10 @@ export async function callModelResponder(
 			});
 
 			if (!response || !response.content) {
-				console.log(
-					"[DogResponder] Empty OpenAI response, falling back to demo",
+				console.warn(
+					`[DogResponder] DEGRADED: empty OpenAI response for "${dogId}" — failing safe (return to creator)`,
 				);
-				const demo = generateDemoResponse(input);
-				return { ...demo, mode: "demo" };
+				return buildDegradedResponse(input, "模型返回空响应 (OpenAI)");
 			}
 			responseContent = response.content;
 			responseModel = response.model;
@@ -264,19 +298,21 @@ export async function callModelResponder(
 			modelUsed: responseModel,
 		};
 	} catch (err) {
+		const msg = redactSecrets((err as Error).message);
 		console.error(
-			`[DogResponder] Model call failed: ${(err as Error).message}`,
+			`[DogResponder] DEGRADED: model call failed for "${dogId}": ${msg} — failing safe`,
 		);
 		if (config.fallbackToDemo) {
-			const demo = generateDemoResponse(input);
-			return { ...demo, mode: "demo" };
+			return buildDegradedResponse(input, `模型调用失败: ${msg}`);
 		}
-		// If fallback disabled, return a minimal error response
+		// Fallback disabled — minimal error response, also fails safe to creator.
 		return {
 			content: `${dogConfig.nickname} 遇到了技术问题，暂时无法回复。\n\n[${dogConfig.nickname}/${dogConfig.defaultModel}🐾]`,
 			mentions: [],
 			ballAction: "return_to_creator",
 			mode: "demo",
+			degraded: true,
+			degradeReason: `模型调用失败: ${msg}`,
 		};
 	}
 }

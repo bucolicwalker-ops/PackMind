@@ -45,6 +45,8 @@ async function invokeDog(
 		dogName: string;
 		response: any;
 		ballAction: any;
+		degraded?: boolean;
+		degradeReason?: string;
 	}>;
 }> {
 	const threadId = createThreadId(threadIdStr);
@@ -86,6 +88,8 @@ async function invokeDog(
 		dogName: string;
 		response: any;
 		ballAction: any;
+		degraded?: boolean;
+		degradeReason?: string;
 	}> = [];
 
 	if (response.ballAction === "pass" && response.nextTarget) {
@@ -124,6 +128,8 @@ async function invokeDog(
 				dogName: nextDogName,
 				response: chainResult.responseMessage,
 				ballAction: chainResult.ownBallAction,
+				degraded: chainResult.response.degraded === true,
+				degradeReason: chainResult.response.degradeReason,
 			});
 
 			// Append deeper chain results
@@ -233,6 +239,8 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 		//    Was ballActionResult (chain tail), which contradicted chainPath.
 		//  - chainPath:  every hop the ball actually took.
 		//  - ballState:  who holds the ball NOW (chain-tail resting state).
+		// Surface degraded fallback so callers/UI aren't fooled by a silent demo.
+		const degraded = result.response.degraded === true;
 		return reply.status(200).send({
 			dogId: dogIdStr,
 			dogName: entryName,
@@ -243,8 +251,12 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 			chainPath,
 			mode: result.response.mode,
 			modelUsed: result.response.modelUsed,
+			degraded,
+			degradeReason: result.response.degradeReason,
 			chainInvokes: result.chainInvokes,
-			message: `🐕 ${entryName} 已被唤醒并回复 (${result.response.mode} mode)`,
+			message: degraded
+				? `⚠️ ${entryName} 模型调用降级（${result.response.degradeReason}）— 已安全回传铲屎官`
+				: `🐕 ${entryName} 已被唤醒并回复 (${result.response.mode} mode)`,
 		});
 	});
 
