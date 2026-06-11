@@ -8,7 +8,11 @@
 
 import type { FastifyInstance } from "fastify";
 import { ballTracker } from "../a2a/BallTracker.js";
-import { buildChainPath, computeOwnBallAction } from "../a2a/ball-action.js";
+import {
+	buildChainPath,
+	computeOwnBallAction,
+	type OwnBallAction,
+} from "../a2a/ball-action.js";
 import { loadModelConfig } from "../model/model-config-loader.js";
 import { dogRegistry } from "../registry/DogRegistry.js";
 import {
@@ -17,9 +21,30 @@ import {
 } from "../responder/DogResponder.js";
 import { messageStore } from "../stores/MessageStore.js";
 import { threadStore } from "../stores/ThreadStore.js";
-import { createDogId, DogId } from "../types/ids.js";
-import { createThreadId, createUserId } from "../types/thread.js";
+import { createDogId } from "../types/ids.js";
+import { createThreadId, createUserId, type Message } from "../types/thread.js";
 import { holdBallSchema, invokeSchema } from "./schemas.js";
+
+/** One entry in the auto-invoke chain — a dog that received & answered the ball. */
+interface ChainInvokeEntry {
+	dogId: string;
+	dogName: string;
+	response: Message;
+	ballAction: OwnBallAction;
+	degraded?: boolean;
+	degradeReason?: string;
+}
+
+/** Result of invoking a dog (with its auto-invoke sub-chain). */
+interface InvokeResult {
+	response: ResponderOutput;
+	responseMessage: Message;
+	/** Final ball state after the WHOLE sub-chain settles (reflects chain tail). */
+	ballActionResult: OwnBallAction;
+	/** This dog's OWN ball decision at this hop — never overwritten by recursion. */
+	ownBallAction: OwnBallAction;
+	chainInvokes: ChainInvokeEntry[];
+}
 
 const DEFAULT_USER = createUserId("default-user");
 
@@ -32,23 +57,7 @@ async function invokeDog(
 	dogIdStr: string,
 	triggerContent: string,
 	currentDepth: number,
-): Promise<{
-	response: ResponderOutput;
-	responseMessage: any;
-	/** Final ball state after the WHOLE sub-chain settles (reflects chain tail). */
-	ballActionResult: any;
-	/** This dog's OWN ball decision at this hop — never overwritten by recursion.
-	 *  Distinct from ballActionResult so chainInvokes can record per-hop truth. */
-	ownBallAction: any;
-	chainInvokes: Array<{
-		dogId: string;
-		dogName: string;
-		response: any;
-		ballAction: any;
-		degraded?: boolean;
-		degradeReason?: string;
-	}>;
-}> {
+): Promise<InvokeResult> {
 	const threadId = createThreadId(threadIdStr);
 	const dogId = createDogId(dogIdStr);
 	const dogEntry = dogRegistry.getOrThrow(dogId);
@@ -82,15 +91,8 @@ async function invokeDog(
 	);
 
 	// Handle ball action
-	let ballActionResult: any = null;
-	const chainInvokes: Array<{
-		dogId: string;
-		dogName: string;
-		response: any;
-		ballAction: any;
-		degraded?: boolean;
-		degradeReason?: string;
-	}> = [];
+	let ballActionResult: OwnBallAction | null = null;
+	const chainInvokes: ChainInvokeEntry[] = [];
 
 	if (response.ballAction === "pass" && response.nextTarget) {
 		ballTracker.release(threadId);
