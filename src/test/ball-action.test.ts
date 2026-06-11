@@ -8,11 +8,12 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { computeOwnBallAction } from "../a2a/ball-action.js";
+import { buildChainPath, computeOwnBallAction } from "../a2a/ball-action.js";
 import { createDogId } from "../types/ids.js";
 
 const collie = createDogId("collie");
 const gsd = createDogId("gsd");
+const corgi = createDogId("corgi");
 
 describe("computeOwnBallAction", () => {
 	it("records a pass with from/to/toName", () => {
@@ -76,5 +77,67 @@ describe("computeOwnBallAction", () => {
 		assert.equal(hop2.action, "return_to_creator");
 		// They must NOT be the same object/value (the old bug symptom).
 		assert.notDeepEqual(hop1, hop2);
+	});
+});
+
+describe("buildChainPath", () => {
+	it("returns empty path when entry dog does not pass", () => {
+		const path = buildChainPath({ action: "return_to_creator" }, "牧哥", []);
+		assert.deepEqual(path, []);
+	});
+
+	it("records a single hop when entry dog passes (no further chain)", () => {
+		const path = buildChainPath(
+			{ action: "pass", from: collie, to: corgi, toName: "短腿" },
+			"牧哥",
+			[],
+		);
+		assert.equal(path.length, 1);
+		assert.equal(path[0]?.from, collie);
+		assert.equal(path[0]?.fromName, "牧哥");
+		assert.equal(path[0]?.to, corgi);
+		assert.equal(path[0]?.toName, "短腿");
+	});
+
+	it("builds a multi-hop path: 牧哥→铁铁→短腿", () => {
+		// This is exactly the case the top-level ballAction USED to hide.
+		const path = buildChainPath(
+			{ action: "pass", from: collie, to: gsd, toName: "铁铁" },
+			"牧哥",
+			[
+				{
+					dogName: "铁铁",
+					ballAction: { action: "pass", from: gsd, to: corgi, toName: "短腿" },
+				},
+				{
+					dogName: "短腿",
+					ballAction: { action: "return_to_creator" },
+				},
+			],
+		);
+		assert.equal(path.length, 2);
+		assert.equal(path[0]?.fromName, "牧哥");
+		assert.equal(path[0]?.toName, "铁铁");
+		assert.equal(path[1]?.fromName, "铁铁");
+		assert.equal(path[1]?.toName, "短腿");
+	});
+
+	it("skips chain entries that did not pass (return_to_creator / hold)", () => {
+		const path = buildChainPath(
+			{ action: "pass", from: collie, to: gsd, toName: "铁铁" },
+			"牧哥",
+			[{ dogName: "铁铁", ballAction: { action: "return_to_creator" } }],
+		);
+		// Only 牧哥's hop counts; 铁铁 returned to creator (no onward pass).
+		assert.equal(path.length, 1);
+		assert.equal(path[0]?.toName, "铁铁");
+	});
+
+	it("tolerates null/missing ballAction in chain entries", () => {
+		const path = buildChainPath(null, "牧哥", [
+			{ dogName: "铁铁", ballAction: null },
+			{ dogName: "短腿" },
+		]);
+		assert.deepEqual(path, []);
 	});
 });

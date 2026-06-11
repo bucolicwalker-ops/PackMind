@@ -8,7 +8,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { ballTracker } from "../a2a/BallTracker.js";
-import { computeOwnBallAction } from "../a2a/ball-action.js";
+import { buildChainPath, computeOwnBallAction } from "../a2a/ball-action.js";
 import { loadModelConfig } from "../model/model-config-loader.js";
 import { dogRegistry } from "../registry/DogRegistry.js";
 import {
@@ -217,17 +217,29 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 		const triggerContent = content ?? "direct invocation";
 		const result = await invokeDog(threadIdStr, dogIdStr, triggerContent, 0);
 
+		const entryName = dogRegistry.getOrThrow(createDogId(dogIdStr)).config
+			.nickname;
+
+		// chainPath: the FULL ball-passing route (A — make passes visible at top level).
+		// Unlike `ballAction` (which only shows the chain tail), this lists every hop.
+		const chainPath = buildChainPath(
+			result.ownBallAction,
+			entryName,
+			result.chainInvokes,
+		);
+
 		return reply.status(200).send({
 			dogId: dogIdStr,
-			dogName: dogRegistry.getOrThrow(createDogId(dogIdStr)).config.nickname,
+			dogName: entryName,
 			threadId: threadIdStr,
 			ballState: ballTracker.get(threadId),
 			response: result.responseMessage,
 			ballAction: result.ballActionResult,
+			chainPath,
 			mode: result.response.mode,
 			modelUsed: result.response.modelUsed,
 			chainInvokes: result.chainInvokes,
-			message: `🐕 ${dogRegistry.getOrThrow(createDogId(dogIdStr)).config.nickname} 已被唤醒并回复 (${result.response.mode} mode)`,
+			message: `🐕 ${entryName} 已被唤醒并回复 (${result.response.mode} mode)`,
 		});
 	});
 

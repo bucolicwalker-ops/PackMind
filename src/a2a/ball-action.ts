@@ -57,3 +57,74 @@ export function computeOwnBallAction(
 	}
 	return { action: "return_to_creator" };
 }
+
+/** One hop in a collaboration chain: who passed the ball to whom. */
+export interface ChainHop {
+	from: DogId;
+	fromName: string;
+	to: DogId;
+	toName: string;
+}
+
+/** A per-hop ball action record (shape of chainInvokes[].ballAction / ownBallAction). */
+interface HopBallAction {
+	action?: BallActionKind;
+	from?: DogId;
+	to?: DogId;
+	toName?: string;
+}
+
+/** A chain invoke entry (shape of invokeDog's chainInvokes[]). */
+interface ChainInvokeEntry {
+	dogName?: string;
+	ballAction?: HopBallAction | null;
+}
+
+/**
+ * Build the full ball-passing path of a chain, as an ordered list of hops.
+ *
+ * Why this exists (A: make ball-passing visible at the API top level):
+ * The top-level `ballAction` only shows the chain TAIL state — a chain like
+ * 牧哥→corgi→return looks like "return_to_creator" and the passes vanish.
+ * chainPath surfaces every actual hop so the front-end / user can SEE the route.
+ *
+ * @param firstOwnAction  the entry dog's OWN ball action (its first hop, if a pass)
+ * @param firstFromName   the entry dog's display name
+ * @param chainInvokes    the auto-invoke chain entries (each carries its own hop)
+ */
+export function buildChainPath(
+	firstOwnAction: HopBallAction | null | undefined,
+	firstFromName: string,
+	chainInvokes: ReadonlyArray<ChainInvokeEntry>,
+): ChainHop[] {
+	const path: ChainHop[] = [];
+
+	// Hop 0: the entry dog's own pass (if it passed at all)
+	if (
+		firstOwnAction?.action === "pass" &&
+		firstOwnAction.from &&
+		firstOwnAction.to
+	) {
+		path.push({
+			from: firstOwnAction.from,
+			fromName: firstFromName,
+			to: firstOwnAction.to,
+			toName: firstOwnAction.toName ?? String(firstOwnAction.to),
+		});
+	}
+
+	// Subsequent hops: each chain entry that itself passed the ball onward
+	for (const entry of chainInvokes) {
+		const ba = entry.ballAction;
+		if (ba?.action === "pass" && ba.from && ba.to) {
+			path.push({
+				from: ba.from,
+				fromName: entry.dogName ?? String(ba.from),
+				to: ba.to,
+				toName: ba.toName ?? String(ba.to),
+			});
+		}
+	}
+
+	return path;
+}
