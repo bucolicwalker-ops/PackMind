@@ -221,20 +221,25 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 			.nickname;
 
 		// chainPath: the FULL ball-passing route (A — make passes visible at top level).
-		// Unlike `ballAction` (which only shows the chain tail), this lists every hop.
+		// Each element is one hop; the whole array is the collaboration trail.
 		const chainPath = buildChainPath(
 			result.ownBallAction,
 			entryName,
 			result.chainInvokes,
 		);
 
+		// Three coherent ball views, no contradiction (砚砚 review P1):
+		//  - ballAction: the ENTRY dog's own first-hop decision (not chain tail).
+		//    Was ballActionResult (chain tail), which contradicted chainPath.
+		//  - chainPath:  every hop the ball actually took.
+		//  - ballState:  who holds the ball NOW (chain-tail resting state).
 		return reply.status(200).send({
 			dogId: dogIdStr,
 			dogName: entryName,
 			threadId: threadIdStr,
 			ballState: ballTracker.get(threadId),
 			response: result.responseMessage,
-			ballAction: result.ballActionResult,
+			ballAction: result.ownBallAction,
 			chainPath,
 			mode: result.response.mode,
 			modelUsed: result.response.modelUsed,
