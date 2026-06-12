@@ -15,6 +15,10 @@
  */
 
 import {
+	type KnownDog,
+	parseSelfBoundaryHandoff,
+} from "../a2a/self-boundary.js";
+import {
 	type AnthropicMessage,
 	callAnthropicCompatible,
 } from "../model/anthropic-client.js";
@@ -119,7 +123,7 @@ export function parseResponse(
 	for (const line of lines) {
 		// Match @dogId patterns at line start (after optional whitespace/list prefix)
 		const match = line.match(/^\s*-?\s*@(\w+)/);
-		if (match && match[1]) {
+		if (match?.[1]) {
 			const mentionedId = match[1];
 			if (KNOWN_DOG_IDS.includes(mentionedId) && mentionedId !== myDogId) {
 				const dogId = createDogId(mentionedId);
@@ -136,10 +140,8 @@ export function parseResponse(
 	const allConfigs = dogRegistry.getAllConfigs();
 	for (const [id, config] of Object.entries(allConfigs)) {
 		if (id === myDogId) continue;
-		for (const pattern of (config as any).mentionPatterns ?? []) {
-			// Extract the handle part from pattern like "@牧哥"
-			const handle = pattern.replace("@", "");
-			// Check if this handle appears in content as a line-start @mention
+		for (const pattern of config.mentionPatterns) {
+			// Check if this pattern appears in content as a line-start @mention
 			for (const line of lines) {
 				const lineMatch = line.match(/^\s*-?\s*@/);
 				if (lineMatch && line.includes(pattern)) {
@@ -151,6 +153,29 @@ export function parseResponse(
 						}
 					}
 				}
+			}
+		}
+	}
+
+	// L1 手段1.3 — structured self-boundary: if the dog didn't line-start @ anyone
+	// but EXPLICITLY declared "需要谁：@X" in its self-boundary block, honor that as a
+	// real handoff. Higher precision than L2's keyword guess — the dog named X itself,
+	// so this is its own autonomous judgment, just wired to the actual pass mechanism.
+	if (!nextTarget) {
+		const knownDogs: KnownDog[] = Object.values(allConfigs).map((cfg) => ({
+			id: cfg.id,
+			nickname: cfg.nickname,
+			mentionPatterns: cfg.mentionPatterns,
+		}));
+		const boundaryHandoff = parseSelfBoundaryHandoff(
+			content,
+			myDogId,
+			knownDogs,
+		);
+		if (boundaryHandoff) {
+			nextTarget = boundaryHandoff.to;
+			if (!mentions.includes(boundaryHandoff.to)) {
+				mentions.push(boundaryHandoff.to);
 			}
 		}
 	}
@@ -200,7 +225,10 @@ export async function callModelResponder(
 		return { ...demo, mode: "demo" };
 	}
 
-	const provider = getProvider(clientId)!;
+	const provider = getProvider(clientId);
+	if (!provider) {
+		return buildDegradedResponse(input, "provider 未配置");
+	}
 	const config = loadModelConfig();
 
 	// Detect API format: Anthropic-style endpoints vs OpenAI-style
