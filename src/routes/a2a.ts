@@ -13,7 +13,10 @@ import {
 	computeOwnBallAction,
 	type OwnBallAction,
 } from "../a2a/ball-action.js";
-import { detectMissedHandoff } from "../a2a/missed-handoff.js";
+import {
+	detectMissedHandoff,
+	selectMissedHandoffCandidate,
+} from "../a2a/missed-handoff.js";
 import { loadModelConfig } from "../model/model-config-loader.js";
 import { dogRegistry } from "../registry/DogRegistry.js";
 import {
@@ -245,19 +248,37 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 		// Surface degraded fallback so callers/UI aren't fooled by a silent demo.
 		const degraded = result.response.degraded === true;
 
-		// L2 missed-handoff detection (MVP-1, see docs/autonomous-collaboration-design.md):
-		// If the chain didn't form (entry dog kept the ball) but the reply talks about
-		// ANOTHER dog's specialty, surface a suggestion — system-side remediation for the
-		// model failing to hand off on its own. Never overrides; just suggests.
-		const missedHandoff =
-			chainPath.length === 0 && !degraded
-				? detectMissedHandoff(
-						result.response.content,
-						dogIdStr,
-						false, // chainPath empty → entry dog did not pass
-						result.response.mentions.map(String),
-					)
-				: null;
+		// L2 missed-handoff detection (see docs/autonomous-collaboration-design.md §4):
+		// Scan the dog that ENDED the chain — entry if it never passed, else the chain
+		// TAIL — for "talked about another specialty but didn't hand off". Previously
+		// gated on chainPath.length===0, so only hop 0 was covered and a multi-hop
+		// chain's last dog escaped L2 entirely. A return-to-creator dog has no
+		// successful outgoing @, so alreadyMentioned is empty.
+		const tailHop = result.chainInvokes.at(-1);
+		const missedHandoffTarget = selectMissedHandoffCandidate(
+			{
+				content: result.response.content,
+				dogId: dogIdStr,
+				action: result.ownBallAction.action,
+				degraded,
+			},
+			tailHop
+				? {
+						content: tailHop.response.content,
+						dogId: String(tailHop.dogId),
+						action: tailHop.ballAction.action,
+						degraded: tailHop.degraded === true,
+					}
+				: null,
+		);
+		const missedHandoff = missedHandoffTarget
+			? detectMissedHandoff(
+					missedHandoffTarget.content,
+					missedHandoffTarget.dogId,
+					false,
+					[],
+				)
+			: null;
 
 		return reply.status(200).send({
 			dogId: dogIdStr,

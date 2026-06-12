@@ -152,3 +152,36 @@ export function detectMissedHandoff(
 
 	return best;
 }
+
+/** Minimal view of one dog's turn — enough to decide whether it ENDED the chain
+ * by returning the ball to the creator (and so might have a missed handoff). */
+export interface ChainHopView {
+	content: string;
+	dogId: string;
+	action: "pass" | "hold" | "return_to_creator";
+	degraded: boolean;
+}
+
+/**
+ * Pick which dog's response to scan for a missed handoff: the dog that ENDED the
+ * chain — the tail if a chain formed, else the entry dog. Returns null unless that
+ * dog ended by returning the ball to the creator (a pass means it handed off; a
+ * hold means it's waiting; a degraded reply is a demo template, not real signal).
+ *
+ * Why this exists: L2 used to check ONLY the entry dog (a2a.ts gated detection on
+ * chainPath.length===0). In a multi-hop chain the TAIL dog could talk about another
+ * specialty and silently end the chain — L2 never saw it. This selector extends L2
+ * coverage to wherever the ball actually came to rest.
+ */
+export function selectMissedHandoffCandidate(
+	entry: ChainHopView,
+	tail: ChainHopView | null,
+): { content: string; dogId: string } | null {
+	// The ball comes to rest at the chain tail (if one formed), else the entry dog.
+	const final = tail ?? entry;
+	// Only a "returned to creator" ending is a missed-handoff candidate: a pass
+	// already handed off, a hold is waiting, and a degraded reply is a demo template
+	// (its keywords would false-fire). Anything else is not a missed handoff.
+	if (final.action !== "return_to_creator" || final.degraded) return null;
+	return { content: final.content, dogId: final.dogId };
+}

@@ -8,7 +8,11 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { detectMissedHandoff } from "../a2a/missed-handoff.js";
+import {
+	type ChainHopView,
+	detectMissedHandoff,
+	selectMissedHandoffCandidate,
+} from "../a2a/missed-handoff.js";
 
 describe("detectMissedHandoff", () => {
 	it("flags a missed handoff: 牧哥 talks visual but doesn't @ 短腿", () => {
@@ -130,5 +134,59 @@ describe("detectMissedHandoff", () => {
 		);
 		assert.ok(out);
 		assert.equal(out.to, "gsd");
+	});
+});
+
+describe("selectMissedHandoffCandidate (L2 chain-tail coverage)", () => {
+	const hop = (over: Partial<ChainHopView>): ChainHopView => ({
+		content: "...",
+		dogId: "collie",
+		action: "return_to_creator",
+		degraded: false,
+		...over,
+	});
+
+	it("checks the ENTRY dog when no chain formed (preserves old behavior)", () => {
+		const entry = hop({ content: "牧哥的回复", dogId: "collie" });
+		const out = selectMissedHandoffCandidate(entry, null);
+		assert.deepEqual(out, { content: "牧哥的回复", dogId: "collie" });
+	});
+
+	it("returns null when the entry dog handed the ball off (passed)", () => {
+		const out = selectMissedHandoffCandidate(hop({ action: "pass" }), null);
+		assert.equal(out, null);
+	});
+
+	it("checks the chain TAIL when a chain formed — the fix", () => {
+		// 牧哥(entry) passed to 短腿(tail); 短腿 ended by returning to creator. The dog
+		// that ENDED the chain is 短腿 → that's who L2 must scan (previously skipped).
+		const entry = hop({ dogId: "collie", action: "pass" });
+		const tail = hop({ content: "短腿的回复", dogId: "corgi" });
+		const out = selectMissedHandoffCandidate(entry, tail);
+		assert.deepEqual(out, { content: "短腿的回复", dogId: "corgi" });
+	});
+
+	it("returns null when the tail passed (chain truncated by depth, not abandoned)", () => {
+		const tail = hop({ dogId: "corgi", action: "pass" });
+		assert.equal(
+			selectMissedHandoffCandidate(hop({ action: "pass" }), tail),
+			null,
+		);
+	});
+
+	it("returns null when the tail is holding the ball (waiting, not missed)", () => {
+		const tail = hop({ dogId: "corgi", action: "hold" });
+		assert.equal(
+			selectMissedHandoffCandidate(hop({ action: "pass" }), tail),
+			null,
+		);
+	});
+
+	it("returns null when the final reply was degraded (demo template, not real signal)", () => {
+		const tail = hop({ dogId: "corgi", degraded: true });
+		assert.equal(
+			selectMissedHandoffCandidate(hop({ action: "pass" }), tail),
+			null,
+		);
 	});
 });
