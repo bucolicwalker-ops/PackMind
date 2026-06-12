@@ -135,4 +135,34 @@ describe("parseSelfBoundaryHandoff", () => {
 		const out = parseSelfBoundaryHandoff(reply("找个产品经理"), "collie", DOGS);
 		assert.equal(out, null);
 	});
+
+	// ── 砚砚 review P2: ambiguous/hedged value — locks the deliberate decision ──
+
+	it("honors a hedged-but-named need (可能要@corgi → still routes to 短腿)", () => {
+		// DELIBERATE: the dog NAMED a teammate in the structured field, even if hedged.
+		// We honor it (give 短腿 a chance) — only EXPLICIT negatives (无/不需要) keep the
+		// ball. Suppressing hedged-but-named needs would contradict the vision
+		// ("提到需要谁就 @ 谁；给队友一个机会 > 静默跳过"). Locks this edge case.
+		const out = parseSelfBoundaryHandoff(
+			reply("可能要@corgi 看看视觉"),
+			"collie",
+			DOGS,
+		);
+		assert.ok(out);
+		assert.equal(out.to, "corgi");
+	});
+
+	it("still routes when a soft verb leads the field (先@短腿看看 → 短腿)", () => {
+		// Guards against over-broadening SOLO_LEAD: 先/考虑/可能/看看 are NOT solo signals —
+		// "先@短腿看看" is a real (soft) handoff. Only 无/没有/不需要/独立/自己 mean "keep the
+		// ball". This test FAILS if those hedge-words get added to SOLO_LEAD — catching that
+		// false-negative regression (砚砚 review: declined the SOLO_LEAD extension for this).
+		const out = parseSelfBoundaryHandoff(
+			reply("先@短腿看看视觉风格"),
+			"collie",
+			DOGS,
+		);
+		assert.ok(out);
+		assert.equal(out.to, "corgi");
+	});
 });
