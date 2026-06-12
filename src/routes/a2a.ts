@@ -13,6 +13,7 @@ import {
 	computeOwnBallAction,
 	type OwnBallAction,
 } from "../a2a/ball-action.js";
+import { detectMissedHandoff } from "../a2a/missed-handoff.js";
 import { loadModelConfig } from "../model/model-config-loader.js";
 import { dogRegistry } from "../registry/DogRegistry.js";
 import {
@@ -243,6 +244,21 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 		//  - ballState:  who holds the ball NOW (chain-tail resting state).
 		// Surface degraded fallback so callers/UI aren't fooled by a silent demo.
 		const degraded = result.response.degraded === true;
+
+		// L2 missed-handoff detection (MVP-1, see docs/autonomous-collaboration-design.md):
+		// If the chain didn't form (entry dog kept the ball) but the reply talks about
+		// ANOTHER dog's specialty, surface a suggestion — system-side remediation for the
+		// model failing to hand off on its own. Never overrides; just suggests.
+		const missedHandoff =
+			chainPath.length === 0 && !degraded
+				? detectMissedHandoff(
+						result.response.content,
+						dogIdStr,
+						false, // chainPath empty → entry dog did not pass
+						result.response.mentions.map(String),
+					)
+				: null;
+
 		return reply.status(200).send({
 			dogId: dogIdStr,
 			dogName: entryName,
@@ -256,9 +272,12 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 			degraded,
 			degradeReason: result.response.degradeReason,
 			chainInvokes: result.chainInvokes,
+			missedHandoff,
 			message: degraded
 				? `⚠️ ${entryName} 模型调用降级（${result.response.degradeReason}）— 已安全回传铲屎官`
-				: `🐕 ${entryName} 已被唤醒并回复 (${result.response.mode} mode)`,
+				: missedHandoff
+					? `🐕 ${entryName} 已回复。💡 提到了${missedHandoff.toName}的专长（${missedHandoff.matchedKeyword}）但没传球 — 要叫${missedHandoff.toName}吗？`
+					: `🐕 ${entryName} 已被唤醒并回复 (${result.response.mode} mode)`,
 		});
 	});
 
