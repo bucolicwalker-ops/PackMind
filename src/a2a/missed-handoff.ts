@@ -74,6 +74,13 @@ const SPECIALTY_DOMAINS: SpecialtyDomain[] = [
 	},
 ];
 
+/**
+ * Minimum specialty-keyword hits required to suggest a handoff (砚砚 review P1).
+ * 1 is too noisy (ambiguous words like 设计/安全 belong to multiple roles);
+ * 2+ means the reply genuinely dwells on another role's domain.
+ */
+const MIN_HIT_COUNT = 2;
+
 /** A suggested handoff the dog mentioned but didn't actually @. */
 export interface MissedHandoff {
 	/** Who the ball should arguably go to. */
@@ -124,7 +131,13 @@ export function detectMissedHandoff(
 			}
 		}
 
-		if (hitCount > 0 && firstMatch) {
+		// Require >= MIN_HIT_COUNT keywords to fire (砚砚 review P1). A SINGLE
+		// keyword is too ambiguous: "设计" / "安全" belong to BOTH the architect
+		// (系统设计 / 架构安全) and a specialist (视觉设计 / 安全审查). Demanding
+		// two+ hits suppresses those false positives while keeping real signals
+		// (e.g. 视觉+设计+交互). We accept missing weak single-keyword signals —
+		// a missed weak hint is better than a noisy false suggestion.
+		if (hitCount >= MIN_HIT_COUNT && firstMatch) {
 			// Keep the domain with the most keyword hits (strongest signal).
 			if (!best || hitCount > best.hitCount) {
 				best = {

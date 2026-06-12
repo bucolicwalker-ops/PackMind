@@ -91,4 +91,44 @@ describe("detectMissedHandoff", () => {
 		assert.equal(out.to, "gsd");
 		assert.equal(out.toName, "铁铁");
 	});
+
+	// ── MIN_HIT_COUNT threshold: single ambiguous keyword must NOT fire (砚砚 P1) ──
+
+	it("does NOT fire on a single ambiguous '设计' (architect's own design talk)", () => {
+		// 牧哥 says "设计系统架构" — 设计 belongs to BOTH roles. 1 hit → no false suggestion.
+		const out = detectMissedHandoff(
+			"我来设计系统架构，定好技术选型。",
+			"collie",
+			false,
+			[],
+		);
+		assert.equal(out, null);
+	});
+
+	it("does NOT fire on a single ambiguous '安全' (architect mentioning security)", () => {
+		// 架构 talk that mentions 安全 once → not a real handoff to 铁铁.
+		const out = detectMissedHandoff(
+			"架构上要考虑安全性，整体方案我来定。",
+			"collie",
+			false,
+			[],
+		);
+		assert.equal(out, null);
+	});
+
+	it("returns null on empty content", () => {
+		assert.equal(detectMissedHandoff("", "collie", false, []), null);
+	});
+
+	it("fires when two keywords clear the threshold (安全 + 审查 → 铁铁)", () => {
+		// Two hits = genuine dwelling on 铁铁's domain.
+		const out = detectMissedHandoff(
+			"代码写完了，需要安全审查。",
+			"collie",
+			false,
+			[],
+		);
+		assert.ok(out);
+		assert.equal(out.to, "gsd");
+	});
 });
