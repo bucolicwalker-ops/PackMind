@@ -300,6 +300,11 @@ async function invokeDog(dogId) {
       await sleep(700);  // let the user register the chain happened
     }
     if (result.response) toast(`${DOGS[dogId].name} 回复了！`, 'success');
+    // L2 missed-handoff suggestion: if the entry dog didn't pass but talked about
+    // another dog's specialty, show a prompt card suggesting to invite that dog.
+    if (result.missedHandoff) {
+      showMissedHandoffSuggestion(result.missedHandoff);
+    }
     await loadMessages();
     await loadBallState();
   } catch (e) {
@@ -361,6 +366,37 @@ function hideChainProgress() {
   if (bar) bar.classList.remove('active');
 }
 
+// ── L2 missed-handoff suggestion ────────
+// When a dog talks about another's specialty but didn't pass, show a suggestion
+// card the user can click to invoke the missed dog.
+function showMissedHandoffSuggestion(mh) {
+  const dog = DOGS[mh.to];
+  if (!dog) return;
+  const container = document.getElementById('chatMessages');
+  const el = document.createElement('div');
+  el.className = 'msg dog missed-handoff-suggestion';
+  el.style.setProperty('--dog-color', dog.color);
+  el.style.setProperty('--dog-bg', hexToRGBA(dog.color, 0.12));
+  el.innerHTML = `
+    <div class="msg-meta">
+      <span class="msg-avatar-mini" style="background:${dog.color}">${dog.name[0]}</span>
+      <strong style="color:${dog.color}">💡 建议</strong>
+    </div>
+    <div class="msg-bubble">
+      提到了<strong style="color:${dog.color}">${dog.name}</strong>的专长（${escapeHtml(mh.matchedKeyword)}）但没传球 —
+      <button class="invoke-missed-btn" data-dog="${mh.to}" style="background:${dog.color};color:#fff;border:none;padding:4px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-left:6px;">
+        叫${dog.name}来看看？
+      </button>
+    </div>`;
+  container.append(el);
+  container.scrollTop = container.scrollHeight;
+  // Wire the button to invoke the missed dog
+  el.querySelector('.invoke-missed-btn').onclick = async () => {
+    el.remove(); // remove suggestion once user acts
+    await invokeDog(mh.to);
+  };
+}
+
 // ── Ball state ─────────────────────────
 async function loadBallState() {
   if (!currentThread) return;
@@ -373,9 +409,14 @@ async function loadBallState() {
       indicator.querySelector('.ball-orb').style.background = dog.color;
       indicator.querySelector('.ball-text').textContent = `${dog.name} 持球`;
     } else {
+      // "球已还给铲屎官" only when an invocation has happened and ball returned.
+      // A fresh thread (no dog ever invoked) should show "球在地上" instead.
+      const msgs = await api(`/messages?threadId=${currentThread.id}&limit=50`);
+      const hadInvocation = msgs.some(m => m.dogId && DOGS[m.dogId]);
       indicator.classList.remove('active');
       indicator.querySelector('.ball-orb').style.background = '';
-      indicator.querySelector('.ball-text').textContent = '球在地上';
+      indicator.querySelector('.ball-text').textContent =
+        hadInvocation ? '球已还给铲屎官' : '球在地上';
     }
   } catch { /* ignore ball state errors */ }
 }
