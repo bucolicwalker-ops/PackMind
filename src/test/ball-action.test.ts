@@ -8,7 +8,11 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildChainPath, computeOwnBallAction } from "../a2a/ball-action.js";
+import {
+	buildChainPath,
+	computeOwnBallAction,
+	computeUnvisitedMentions,
+} from "../a2a/ball-action.js";
 import { createDogId } from "../types/ids.js";
 
 const collie = createDogId("collie");
@@ -139,5 +143,35 @@ describe("buildChainPath", () => {
 			{ dogName: "短腿" },
 		]);
 		assert.deepEqual(path, []);
+	});
+});
+
+describe("computeUnvisitedMentions (显式@必达)", () => {
+	it("returns a declared @ the chain never reached (the dropped 铁铁)", () => {
+		// 牧哥 @'d 短腿+铁铁 but the chain only reached 短腿 → 铁铁 must be swept.
+		const out = computeUnvisitedMentions(["corgi", "gsd"], ["collie", "corgi"]);
+		assert.deepEqual(out, ["gsd"]);
+	});
+
+	it("returns empty when every declared @ was visited", () => {
+		const out = computeUnvisitedMentions(
+			["corgi", "gsd"],
+			["collie", "corgi", "gsd"],
+		);
+		assert.deepEqual(out, []);
+	});
+
+	it("returns empty when no dog was @'d", () => {
+		assert.deepEqual(computeUnvisitedMentions([], ["collie"]), []);
+	});
+
+	it("dedups repeated mentions", () => {
+		const out = computeUnvisitedMentions(["gsd", "corgi", "gsd"], ["collie"]);
+		assert.deepEqual(out, ["gsd", "corgi"]);
+	});
+
+	it("preserves declaration order", () => {
+		const out = computeUnvisitedMentions(["gsd", "corgi"], ["collie"]);
+		assert.deepEqual(out, ["gsd", "corgi"]);
 	});
 });

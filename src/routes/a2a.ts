@@ -11,6 +11,7 @@ import { ballTracker } from "../a2a/BallTracker.js";
 import {
 	buildChainPath,
 	computeOwnBallAction,
+	computeUnvisitedMentions,
 	type OwnBallAction,
 } from "../a2a/ball-action.js";
 import {
@@ -115,9 +116,13 @@ async function invokeDog(
 		// Auto-chain: if within depth limit, invoke the next dog automatically
 		if (currentDepth < config.maxInvokeChainDepth) {
 			const nextDogId = response.nextTarget as string;
-			const nextDogName = dogRegistry.getOrThrow(response.nextTarget).config
-				.nickname;
-			const chainTrigger = `${dogEntry.config.nickname} @${nextDogName}: 请接球`;
+			const nextDogEntry = dogRegistry.getOrThrow(response.nextTarget);
+			const nextDogName = nextDogEntry.config.nickname;
+			const nextStrengths = nextDogEntry.config.teamStrengths.join("、");
+			// Thick handoff trigger (铲屎官 found the thin "请接球" caused role-confusion +
+			// no convergence): anchor the receiver's identity + task (do REAL work, don't
+			// parrot the previous turn) and give a stop rule (all domains covered → 需要谁：无).
+			const chainTrigger = `${dogEntry.config.nickname}把球传给你了。**你现在是${nextDogName}**，用你的专长（${nextStrengths}）做你那一部分的**实质工作**——看上面的对话历史了解需求，别复述上一棒的话、别空手把球传走，先拿出你自己的东西。做完后按【自我边界】判断：还缺别的专长就 @ 对应的狗；三方专长都覆盖到了，就写「需要谁：无」把球收回铲屎官，别为传而传。`;
 
 			const chainResult = await invokeDog(
 				threadIdStr,
@@ -231,6 +236,41 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 
 		const entryName = dogRegistry.getOrThrow(createDogId(dogIdStr)).config
 			.nickname;
+
+		// 显式@必达 (guaranteed delivery): the entry dog auto-chains only to its FIRST @.
+		// Any dog it EXPLICITLY @'d that the chain never reached gets a turn here — so a
+		// declared need (牧哥 @铁铁 for security审查) is never silently dropped just because
+		// it wasn't the first @. See ball-action.computeUnvisitedMentions.
+		const visitedDogIds = [
+			dogIdStr,
+			...result.chainInvokes.map((c) => String(c.dogId)),
+		];
+		const unvisited = computeUnvisitedMentions(
+			result.response.mentions.map(String),
+			visitedDogIds,
+		);
+		for (const missedDogId of unvisited) {
+			const missedName = dogRegistry.getOrThrow(createDogId(missedDogId)).config
+				.nickname;
+			const sweepTrigger = `${entryName}点名要你（${missedName}）做你那部分专长——前面的链没走到你，现在补上、别漏。看对话历史了解需求，拿出你的实质工作。`;
+			const sweepResult = await invokeDog(
+				threadIdStr,
+				missedDogId,
+				sweepTrigger,
+				1,
+			);
+			result.chainInvokes.push(
+				{
+					dogId: missedDogId,
+					dogName: missedName,
+					response: sweepResult.responseMessage,
+					ballAction: sweepResult.ownBallAction,
+					degraded: sweepResult.response.degraded === true,
+					degradeReason: sweepResult.response.degradeReason,
+				},
+				...sweepResult.chainInvokes,
+			);
+		}
 
 		// chainPath: the FULL ball-passing route (A — make passes visible at top level).
 		// Each element is one hop; the whole array is the collaboration trail.

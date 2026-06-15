@@ -133,3 +133,27 @@ export function buildChainPath(
 
 	return path;
 }
+
+/**
+ * 显式@必达 (guaranteed delivery): the entry dog only auto-chains to its FIRST @.
+ * Given the dogs it explicitly @'d and the dogs the chain actually visited, this
+ * returns the ones that were NEVER reached — so a declared need (e.g. 牧哥 @铁铁
+ * for a security review) is never silently dropped just because it wasn't the
+ * first @. Dedups and preserves declaration order.
+ */
+export function computeUnvisitedMentions(
+	declaredMentions: ReadonlyArray<string>,
+	visitedDogIds: ReadonlyArray<string>,
+): string[] {
+	const visited = new Set(visitedDogIds.map(String));
+	const seen = new Set<string>();
+	const result: string[] = [];
+	for (const raw of declaredMentions) {
+		const id = String(raw);
+		if (!visited.has(id) && !seen.has(id)) {
+			result.push(id);
+			seen.add(id);
+		}
+	}
+	return result;
+}
