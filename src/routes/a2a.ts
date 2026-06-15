@@ -252,7 +252,7 @@ export function registerA2aRoutes(app: FastifyInstance): void {
 		for (const missedDogId of unvisited) {
 			const missedName = dogRegistry.getOrThrow(createDogId(missedDogId)).config
 				.nickname;
-			const sweepTrigger = `${entryName}点名要你（${missedName}）做你那部分专长——前面的链没走到你，现在补上、别漏。看对话历史了解需求，拿出你的实质工作。`;
+			const sweepTrigger = `${entryName}点名要你（${missedName}）做你那部分专长——前面的链没走到你，现在补上、别漏。看对话历史了解需求，拿出你的实质工作。做完后按【自我边界】判断：所有声明的需求都覆盖了就写「需要谁：无」把球收回铲屎官，还缺别的专长才 @ 对应的狗，别为传而传（砚砚 review P1）。`;
 			const sweepResult = await invokeDog(
 				threadIdStr,
 				missedDogId,
