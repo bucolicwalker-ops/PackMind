@@ -11,7 +11,7 @@
       "avatar": "collie.svg",
       "color": "#E8A87C",
       "mentionPatterns": ["@牧哥", "@边牧", "@collie"],
-      "defaultModel": "qwen3.7-plus",
+      "defaultModel": "glm-5.1",
       "clientId": "dashscope",
       "teamStrengths": ["系统设计", "深度思考", "架构规划", "耐心引导"],
       "caution": ["过度思考可能导致决策慢", "温柔风格可能在紧急时不够果断"],
